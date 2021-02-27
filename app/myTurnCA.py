@@ -1,8 +1,10 @@
 import json
 import logging
-from datetime import date, datetime
+import operator
+from datetime import date, datetime, timedelta
 from typing import List
 import pytz
+import functools
 
 import requests
 
@@ -50,15 +52,17 @@ ELIGIBLE_REQUEST_BODY = {
 
 
 class Location:
-    def __init__(self, location_id: str, name: str, booking_type: str, vaccine_data: str, distance: float):
+    def __init__(self, location_id: str, name: str, booking_type: str, vaccine_data: str,
+                 distance: float, address: str):
         self.location_id = location_id
         self.name = name
         self.booking_type = booking_type
         self.vaccine_data = vaccine_data
         self.distance_in_meters = distance
+        self.address = address
 
     def __str__(self):
-        return f'{self.name} ({self.location_id}) {self.distance_in_meters * 0.000621:.2f} mile(s) away'
+        return f'{self.name} {self.distance_in_meters * 0.000621:.2f} mile(s) away'
 
 
 class LocationAvailability:
@@ -67,14 +71,9 @@ class LocationAvailability:
             self.date = date_available
             self.available = available
 
-    def __init__(self, location_id: str, vaccine_data: str, dates_available: List[Availability]):
-        self.location_id = location_id
-        self.vaccine_data = vaccine_data
+    def __init__(self, location: Location, dates_available: List[Availability]):
+        self.location = location
         self.dates_available = dates_available
-
-    def __str__(self):
-        return f'location_id:{self.location_id}, vaccine_data:{self.vaccine_data}, ' \
-               f'dates_available:{[x.__dict__ for x in self.dates_available]}'
 
 
 class LocationAvailabilitySlots:
@@ -83,9 +82,8 @@ class LocationAvailabilitySlots:
             self.local_start_time = local_start_time
             self.duration_seconds = duration_seconds
 
-    def __init__(self, location_id: str, vaccine_data: str, slots: List[AvailabilitySlots]):
-        self.location_id = location_id
-        self.vaccine_data = vaccine_data
+    def __init__(self, location: Location, slots: List[AvailabilitySlots]):
+        self.location = location
         self.slots = slots
 
 
@@ -95,9 +93,9 @@ class MyTurnCA:
         self.vaccine_data = self._get_vaccine_data()
 
     def _get_vaccine_data(self) -> str:
-        self.logger.debug(f'sending request to {URL}/eligibility with body - {json.dumps(ELIGIBLE_REQUEST_BODY)}')
+        self.logger.info(f'sending request to {URL}/eligibility with body - {json.dumps(ELIGIBLE_REQUEST_BODY)}')
         response = requests.post(url=f'{URL}/eligibility', json=ELIGIBLE_REQUEST_BODY).json()
-        self.logger.debug(f'got response from /eligibility - {json.dumps(response)}')
+        self.logger.info(f'got response from /eligibility - {json.dumps(response)}')
 
         if response['eligible'] is False:
             raise RuntimeError('something is wrong, default /eligibility body returned \'eligible\' = False')
@@ -114,56 +112,80 @@ class MyTurnCA:
             'vaccineData': self.vaccine_data
         }
 
-        self.logger.debug(f'sending request to {URL}/locations/search with body - {json.dumps(body)}')
+        self.logger.info(f'sending request to {URL}/locations/search with body - {json.dumps(body)}')
         response = requests.post(url=f'{URL}/locations/search', json=body).json()
-        self.logger.debug(f'got response from /locations/search - {json.dumps(response)}')
+        self.logger.info(f'got response from /locations/search - {json.dumps(response)}')
 
-        return [Location(location_id=x['extId'], name=x['name'], booking_type=x['type'],
+        return [Location(location_id=x['extId'], name=x['name'], address=x['displayAddress'], booking_type=x['type'],
                          vaccine_data=x['vaccineData'], distance=x['distanceInMeters'])
                 for x in response['locations']]
 
-    def get_availability(self, location_id: str, start_date: date, end_date: date,
-                         vaccine_data: str) -> LocationAvailability:
+    def get_availability(self, location: Location, start_date: date, end_date: date) -> LocationAvailability:
         body = {
             'startDate': start_date.strftime('%Y-%m-%d'),
             'endDate': end_date.strftime('%Y-%m-%d'),
-            'vaccineData': vaccine_data,
+            'vaccineData': location.vaccine_data,
             'doseNumber': 1
         }
 
-        self.logger.debug(
-            f'sending request to {URL}/locations/{location_id}/availability with body - {json.dumps(body)}')
-        response = requests.post(url=f'{URL}/locations/{location_id}/availability', json=body)
-        self.logger.debug(f'got response from /locations/{location_id}/availability - {json.dumps(response.json())}')
+        self.logger.info(
+            f'sending request to {URL}/locations/{location.location_id}/availability with body - {json.dumps(body)}')
+        response = requests.post(url=f'{URL}/locations/{location.location_id}/availability', json=body)
+        self.logger.info(f'got response from /locations/{location.location_id}/availability - {json.dumps(response.json())}')
 
         if response.status_code != requests.codes.OK:
-            raise ValueError(f'Something went wrong, location {location_id} probably doesn\'t exist')
+            raise ValueError(f'Something went wrong, location {location.location_id} probably doesn\'t exist')
 
         response_json = response.json()
-        return LocationAvailability(location_id=response_json['locationExtId'],
-                                    vaccine_data=response_json['vaccineData'],
+        return LocationAvailability(location=location,
                                     dates_available=[LocationAvailability.Availability(date_available=datetime.strptime(x['date'], "%Y-%m-%d").date(),
                                                                                        available=x['available'])
                                                      for x in response_json['availability'] if x['available'] is True])
 
-    def get_slots(self, location_id: str, start_date: date, vaccine_data: str) -> LocationAvailabilitySlots:
+    def get_slots(self, location: Location, start_date: date) -> LocationAvailabilitySlots:
         body = {
-            'vaccineData': vaccine_data
+            'vaccineData': location.vaccine_data
         }
 
-        self.logger.debug(f'sending request to '
-                          f'{URL}/locations/{location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots '
-                          f'with body - {json.dumps(body)}')
-        response = requests.post(url=f'{URL}/locations/{location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots',
+        self.logger.info(f'sending request to '
+                         f'{URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots '
+                         f'with body - {json.dumps(body)}')
+        response = requests.post(url=f'{URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots',
                                  json=body).json()
-        self.logger.debug(f'got response from /locations/{location_id}/date/{start_date.strftime("%Y-%m-%d")} - {json.dumps(response)}')
+        self.logger.info(f'got response from /locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")} - {json.dumps(response)}')
 
-        return LocationAvailabilitySlots(location_id=location_id, vaccine_data=response['vaccineData'],
+        return LocationAvailabilitySlots(location=location,
                                          slots=[LocationAvailabilitySlots.AvailabilitySlots(
                                              duration_seconds=x['durationSeconds'],
                                              local_start_time=self._combine_date_and_time(start_date, x['localStartTime']))
                                              for x in response['slotsWithAvailability']
                                              if self._combine_date_and_time(start_date, x['localStartTime']) > datetime.now(tz=pytz.timezone('US/Pacific'))])
+
+    def get_appointments(self, latitude: float, longitude: float, start_date: date, end_date: date) -> List[LocationAvailabilitySlots]:
+        locations = self.get_locations(latitude=latitude, longitude=longitude)
+        if not locations:
+            return []
+
+        if start_date > end_date:
+            raise ValueError('Provided start_date must be before end_date')
+
+        appointments = []
+        for location in locations:
+            days_available = self.get_availability(location=location, start_date=start_date, end_date=end_date).dates_available
+            if not days_available:
+                continue
+
+            location_appointments = [location_appointment for location_appointment in
+                                     [self.get_slots(location=location, start_date=day_available.date) for day_available in days_available]
+                                     if location_appointment.slots]
+            if not location_appointments:
+                continue
+
+            appointments.append(LocationAvailabilitySlots(location=location_appointments[0].location,
+                                                          slots=functools.reduce(operator.add,
+                                                                                 [location_appointment.slots for location_appointment in location_appointments])))
+
+        return appointments
 
     @staticmethod
     def _combine_date_and_time(start_date: date, timestamp: str) -> datetime:
