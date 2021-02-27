@@ -2,8 +2,8 @@ import logging
 import multiprocessing
 import queue
 import time
-import pandas
 from datetime import date, timedelta
+from pandas import isnull, DataFrame
 
 import pgeocode
 from discord.ext import commands, tasks
@@ -11,7 +11,7 @@ from discord.ext import commands, tasks
 from myTurnCA import MyTurnCA
 
 
-class Reminder:
+class AppointmentNotification:
     def __init__(self, channel_id: commands.Context, message: str):
         self.channel_id = channel_id
         self.message = message
@@ -28,40 +28,61 @@ def run(token: str):
     nomi = pgeocode.Nominatim('us')
     reminder_queue = multiprocessing.Queue()
 
-    def add_reminder(ctx: commands.Context, result_queue: multiprocessing.Queue):
-        print('running...')
-        time.sleep(10)
-        # result_queue.put(f'Hey {ctx.author.mention}, this is your reminder!')
-        # result_queue.put(Reminder(ctx=ctx, message=f'Hey {ctx.author.mention}, this is your reminder!'))
-        # result_queue.put(f'Hey {ctx.author.mention}, this is your reminder!')
-        result_queue.put(Reminder(channel_id=ctx.channel.id, message=f'Hey {ctx.author.mention}, this is your reminder!'))
-        print('put reminder in queue')
+    def is_zip_code_valid(zip_code_result: DataFrame):
+        return not any([
+            isnull(zip_code_result['latitude']),
+            isnull(zip_code_result['longitude']),
+            isnull(zip_code_result['state_code']),
+            zip_code_result['state_code'] != 'CA'
+        ])
+
+    def add_notification_generator(ctx: commands.Context, latitude: int,
+                                   longitude: int, result_queue: multiprocessing.Queue):
+        while True:
+            start_date = date.today()
+            end_date = start_date + timedelta(weeks=1)
+            appointments = my_turn_ca.get_appointments(latitude=latitude, longitude=longitude,
+                                                       start_date=start_date, end_date=end_date)
+            if not appointments:
+                time.sleep(120)
+                continue
+
+            message = f'Hey {ctx.author.mention}, I found available openings at these locations from ' \
+                      f'{start_date.strftime("%x")} to {end_date.strftime("%x")}, ' \
+                      f'go to https://myturn.ca.gov to make an appointment!\n'
+
+            for appointment in appointments:
+                message += f'  * {str(appointment.location)} - {len(appointment.slots)} appointment(s) available\n'
+
+            logger.info('found appointments, pushing onto queue')
+            result_queue.put(AppointmentNotification(channel_id=ctx.channel.id, message=message))
+            return
 
     @bot.command()
-    async def set_reminder(ctx: commands.Context):
-        worker = multiprocessing.Process(target=add_reminder, args=(ctx, reminder_queue))
+    async def notify(ctx: commands.Context, zip_code: int):
+        city = nomi.query_postal_code(zip_code)
+        if not is_zip_code_valid(city):
+            raise InvalidZipCode
+
+        await ctx.reply(f'OK, I\'ll let you know when I find appointments in your area')
+        worker = multiprocessing.Process(target=add_notification_generator,
+                                         args=(ctx, city['latitude'], city['longitude'], reminder_queue))
         worker.start()
-        await ctx.reply(f'OK {ctx.author.mention}, I\'ll remind you in 10 seconds')
-        get_reminders.start()
+        get_notifications.start()
 
     @tasks.loop(seconds=5)
-    async def get_reminders():
-        print('running loop...')
+    async def get_notifications():
         try:
-            reminder = reminder_queue.get(block=False)
-            print(f'found reminder in queue - {reminder}')
-            await bot.get_channel(reminder.channel_id).send(reminder.message)
+            notification = reminder_queue.get(block=False)
+            logger.info('found notification in queue, sending message to channel')
+            await bot.get_channel(notification.channel_id).send(notification.message)
         except queue.Empty:
-            print('queue was empty')
-
-    @bot.command()
-    async def hello(ctx: commands.Context):
-        await ctx.reply(f'Hi {ctx.author.mention}!')
+            pass
 
     @bot.command()
     async def get_locations(ctx: commands.Context, zip_code: int):
         city = nomi.query_postal_code(zip_code)
-        if pandas.isnull(city['latitude']) or pandas.isnull(city['longitude']):
+        if not is_zip_code_valid(city):
             raise InvalidZipCode
 
         locations = my_turn_ca.get_locations(city['latitude'], city['longitude'])
@@ -78,7 +99,7 @@ def run(token: str):
     @bot.command()
     async def get_appointments(ctx: commands.Context, zip_code: int):
         city = nomi.query_postal_code(zip_code)
-        if pandas.isnull(city['latitude']) or pandas.isnull(city['longitude']):
+        if not is_zip_code_valid(city):
             raise InvalidZipCode
 
         start_date = date.today()
@@ -100,12 +121,13 @@ def run(token: str):
 
     @get_locations.error
     @get_appointments.error
+    @notify.error
     async def command_error_handler(ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.TooManyArguments) or isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(str(error))
             return
         if isinstance(error, InvalidZipCode):
-            await ctx.reply(f'Provided zip code doesn\'t exist in the United States')
+            await ctx.reply(f'Provided zip code doesn\'t exist in California')
             return
         if isinstance(error, commands.BadArgument):
             await ctx.reply(f'Provided zip code must be a valid integer, see `!help {ctx.command.name}`')
