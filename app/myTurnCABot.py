@@ -3,26 +3,41 @@ import multiprocessing
 import queue
 import time
 from datetime import date, timedelta
-from pandas import isnull, DataFrame
 
 import pgeocode
 from discord.ext import commands, tasks
+from pandas import isnull, DataFrame
 
 from myTurnCA import MyTurnCA
 
 
 class AppointmentNotification:
-    def __init__(self, channel_id: commands.Context, message: str):
+    def __init__(self, channel_id: int, message: str, zip_code: int, user_id: int):
         self.channel_id = channel_id
         self.message = message
+        self.user_id = user_id
+        self.zip_code = zip_code
 
 
 class InvalidZipCode(commands.BadArgument):
     pass
 
 
+class MyTurnCABot(commands.Bot):
+    def __init__(self, command_prefix, **options):
+        super().__init__(command_prefix, **options)
+        self.worker_processes = {}
+
+    async def close(self):
+        for process in self.worker_processes.values():
+            process.kill()
+            process.join()
+
+        await super().close()
+
+
 def run(token: str):
-    bot = commands.Bot(command_prefix='!', description='Bot to help you get a COVID-19 vaccination appointment in CA')
+    bot = MyTurnCABot(command_prefix='!', description='Bot to help you get a COVID-19 vaccination appointment in CA')
     logger = logging.getLogger(__name__)
     my_turn_ca = MyTurnCA()
     nomi = pgeocode.Nominatim('us')
@@ -36,12 +51,13 @@ def run(token: str):
             zip_code_result['state_code'] != 'CA'
         ])
 
-    def add_notification_generator(ctx: commands.Context, latitude: int,
-                                   longitude: int, result_queue: multiprocessing.Queue):
+    def add_notification_generator(ctx: commands.Context, zip_code_query: DataFrame,
+                                   result_queue: multiprocessing.Queue):
         while True:
             start_date = date.today()
             end_date = start_date + timedelta(weeks=1)
-            appointments = my_turn_ca.get_appointments(latitude=latitude, longitude=longitude,
+            appointments = my_turn_ca.get_appointments(latitude=zip_code_query['latitude'],
+                                                       longitude=zip_code_query['longitude'],
                                                        start_date=start_date, end_date=end_date)
             if not appointments:
                 time.sleep(120)
@@ -55,7 +71,10 @@ def run(token: str):
                 message += f'  * {str(appointment.location)} - {len(appointment.slots)} appointment(s) available\n'
 
             logger.info('found appointments, pushing onto queue')
-            result_queue.put(AppointmentNotification(channel_id=ctx.channel.id, message=message))
+            result_queue.put(AppointmentNotification(channel_id=ctx.channel.id,
+                                                     message=message,
+                                                     zip_code=int(zip_code_query['postal_code']),
+                                                     user_id=ctx.author.id))
             return
 
     @bot.command()
@@ -66,15 +85,18 @@ def run(token: str):
 
         await ctx.reply(f'OK, I\'ll let you know when I find appointments in your area')
         worker = multiprocessing.Process(target=add_notification_generator,
-                                         args=(ctx, city['latitude'], city['longitude'], reminder_queue))
+                                         args=(ctx, city, reminder_queue))
         worker.start()
-        get_notifications.start()
+        bot.worker_processes[worker.pid] = worker
 
     @tasks.loop(seconds=5)
-    async def get_notifications():
+    async def poll_notifications():
+        [bot.worker_processes.pop(pid) for pid in [pid for pid in bot.worker_processes.keys()
+                                                   if not bot.worker_processes[pid].is_alive()]]
+
         try:
             notification = reminder_queue.get(block=False)
-            logger.info('found notification in queue, sending message to channel')
+            logger.info(f'found notification in queue, sending message to channel - {notification.__dict__}')
             await bot.get_channel(notification.channel_id).send(notification.message)
         except queue.Empty:
             pass
@@ -136,14 +158,18 @@ def run(token: str):
         raise error
 
     @bot.event
-    async def on_command_error(ctx, error):
-        if ctx.command:
-            return
-
+    async def on_command_error(ctx: commands.Context, error: commands.UserInputError):
         if isinstance(error, commands.CommandNotFound):
             await ctx.reply(f'`{ctx.message.content}` isn\'t a valid command, see `!help` for supported commands')
             return
 
+        if ctx.command.error:
+            return
+
         raise error
+
+    @bot.event
+    async def on_ready():
+        poll_notifications.start()
 
     bot.run(token)
