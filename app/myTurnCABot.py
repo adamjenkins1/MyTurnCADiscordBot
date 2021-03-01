@@ -5,6 +5,7 @@ import time
 from datetime import date, timedelta
 
 import pgeocode
+import pymongo
 from discord.ext import commands, tasks
 from pandas import isnull, DataFrame
 
@@ -36,12 +37,14 @@ class MyTurnCABot(commands.Bot):
         await super().close()
 
 
-def run(token: str):
+def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str, mongodb_port: str):
     bot = MyTurnCABot(command_prefix='!', description='Bot to help you get a COVID-19 vaccination appointment in CA')
     logger = logging.getLogger(__name__)
     my_turn_ca = MyTurnCA()
     nomi = pgeocode.Nominatim('us')
     reminder_queue = multiprocessing.Queue()
+    mongodb = pymongo.MongoClient(f'mongodb://{mongodb_user}:{mongodb_password}@{mongodb_host}:{mongodb_port}')
+    my_turn_ca_db = mongodb.my_turn_ca
 
     def is_zip_code_valid(zip_code_result: DataFrame):
         return not any([
@@ -51,7 +54,7 @@ def run(token: str):
             zip_code_result['state_code'] != 'CA'
         ])
 
-    def add_notification_generator(ctx: commands.Context, zip_code_query: DataFrame,
+    def add_notification_generator(channel_id: int, user_id: int, zip_code_query: DataFrame,
                                    result_queue: multiprocessing.Queue):
         while True:
             start_date = date.today()
@@ -63,7 +66,7 @@ def run(token: str):
                 time.sleep(120)
                 continue
 
-            message = f'Hey {ctx.author.mention}, I found available openings at these locations from ' \
+            message = f'Hey <@{user_id}>, I found available openings at these locations from ' \
                       f'{start_date.strftime("%x")} to {end_date.strftime("%x")}, ' \
                       f'go to https://myturn.ca.gov to make an appointment!\n'
 
@@ -71,11 +74,25 @@ def run(token: str):
                 message += f'  * {str(appointment.location)} - {len(appointment.slots)} appointment(s) available\n'
 
             logger.info('found appointments, pushing onto queue')
-            result_queue.put(AppointmentNotification(channel_id=ctx.channel.id,
+            result_queue.put(AppointmentNotification(channel_id=channel_id,
                                                      message=message,
                                                      zip_code=int(zip_code_query['postal_code']),
-                                                     user_id=ctx.author.id))
+                                                     user_id=user_id))
             return
+
+    @bot.command()
+    async def cancel_notification(ctx: commands.Context, zip_code: int):
+        notifications = list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id, 'zip_code': zip_code}))
+        if not notifications:
+            await ctx.reply(f'You don\'t have any outstanding notification requests for zip code {zip_code}')
+            return
+
+        my_turn_ca_db.notifications.delete_one({'_id': notifications[0]['_id']})
+        await ctx.reply(f'Your notification request for zip code {zip_code} has been canceled, '
+                        f'see `!help notify` to request another')
+
+        bot.worker_processes[notifications[0]['pid']].kill()
+        bot.worker_processes[notifications[0]['pid']].join()
 
     @bot.command()
     async def notify(ctx: commands.Context, zip_code: int):
@@ -83,11 +100,32 @@ def run(token: str):
         if not is_zip_code_valid(city):
             raise InvalidZipCode
 
+        if list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id, 'zip_code': zip_code})):
+            await ctx.reply('You already have an outstanding notification request, '
+                            'see `!help cancel_notification` to cancel it')
+            return
+
         await ctx.reply(f'OK, I\'ll let you know when I find appointments in your area')
         worker = multiprocessing.Process(target=add_notification_generator,
-                                         args=(ctx, city, reminder_queue))
+                                         args=(ctx.channel.id, ctx.author.id, city, reminder_queue))
         worker.start()
         bot.worker_processes[worker.pid] = worker
+        my_turn_ca_db.notifications.insert_one({
+            'user_id': ctx.author.id,
+            'zip_code': zip_code,
+            'pid': worker.pid,
+            'channel_id': ctx.channel.id
+        })
+
+    @bot.command()
+    async def get_notifications(ctx: commands.Context):
+        notifications = list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id}))
+        if not notifications:
+            await ctx.reply('You don\'t have any outstanding notification requests')
+            return
+
+        await ctx.reply(f'You\'ve asked to be notified when appointments become available near these zip codes '
+                        f'- {", ".join([str(notification["zip_code"]) for notification in notifications])}')
 
     @tasks.loop(seconds=5)
     async def poll_notifications():
@@ -98,6 +136,11 @@ def run(token: str):
             notification = reminder_queue.get(block=False)
             logger.info(f'found notification in queue, sending message to channel - {notification.__dict__}')
             await bot.get_channel(notification.channel_id).send(notification.message)
+            my_turn_ca_db.notifications.delete_one({
+                'user_id': notification.user_id,
+                'zip_code': notification.zip_code,
+                'channel_id': notification.channel_id
+            })
         except queue.Empty:
             pass
 
@@ -144,6 +187,8 @@ def run(token: str):
     @get_locations.error
     @get_appointments.error
     @notify.error
+    @get_notifications.error
+    @cancel_notification.error
     async def command_error_handler(ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.TooManyArguments) or isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(str(error))
@@ -170,6 +215,21 @@ def run(token: str):
 
     @bot.event
     async def on_ready():
-        poll_notifications.start()
+        if not poll_notifications.is_running():
+            poll_notifications.start()
+
+        notification_cursor = my_turn_ca_db.notifications.find()
+        for notification in notification_cursor:
+            if notification['pid'] not in bot.worker_processes:
+                worker = multiprocessing.Process(target=add_notification_generator,
+                                                 args=(notification['channel_id'],
+                                                       notification['user_id'],
+                                                       nomi.query_postal_code(notification['zip_code']),
+                                                       reminder_queue))
+                worker.start()
+                bot.worker_processes[worker.pid] = worker
+                my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'pid': worker.pid}})
+
+        notification_cursor.close()
 
     bot.run(token)
