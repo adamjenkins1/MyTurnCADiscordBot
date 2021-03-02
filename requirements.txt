@@ -1,0 +1,5 @@
+discord.py==1.6.0
+pgeocode==0.3.0
+pymongo==3.11.3
+pytz==2021.1
+requests==2.25.1
