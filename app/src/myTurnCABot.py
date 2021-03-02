@@ -9,12 +9,12 @@ import pymongo
 from discord.ext import commands, tasks
 from pandas import isnull, DataFrame
 
-from appointmentNotification import AppointmentNotification
-from constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
+from .appointmentNotification import AppointmentNotification
+from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
     GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION
-from exceptions import InvalidZipCode
-from myTurnCA import MyTurnCA
+from .exceptions import InvalidZipCode
+from .myTurnCA import MyTurnCA
 
 
 class MyTurnCABot(commands.Bot):

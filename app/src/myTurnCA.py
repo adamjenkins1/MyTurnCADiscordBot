@@ -8,7 +8,7 @@ from typing import List
 import pytz
 import requests
 
-from constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY
+from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY
 
 
 class Location:
@@ -21,6 +21,14 @@ class Location:
         self.distance_in_meters = distance
         self.address = address
 
+    def __eq__(self, other):
+        return self.location_id == other.location_id \
+               and self.name == other.name \
+               and self.booking_type == other.booking_type \
+               and self.vaccine_data == other.vaccine_data \
+               and self.distance_in_meters == other.distance_in_meters \
+               and self.address == other.address
+
     def __str__(self):
         return f'{self.name} {self.distance_in_meters * 0.000621:.2f} mile(s) away'
 
@@ -30,6 +38,12 @@ class LocationAvailability:
         def __init__(self, date_available: date, available: bool):
             self.date = date_available
             self.available = available
+
+        def __eq__(self, other):
+            return self.date == other.date and self.available == other.available
+
+    def __eq__(self, other):
+        return self.location == other.location and self.dates_available == other.dates_available
 
     def __init__(self, location: Location, dates_available: List[Availability]):
         self.location = location
@@ -90,17 +104,12 @@ class MyTurnCA:
 
         self.logger.info(
             f'sending request to {MY_TURN_URL}/locations/{location.location_id}/availability with body - {json.dumps(body)}')
-        response = requests.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/availability', json=body)
-        self.logger.info(f'got response from /locations/{location.location_id}/availability - {json.dumps(response.json())}')
-
-        if response.status_code != requests.codes.OK:
-            raise ValueError(f'Something went wrong, location {location.location_id} probably doesn\'t exist')
-
-        response_json = response.json()
+        response = requests.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/availability', json=body).json()
+        self.logger.info(f'got response from /locations/{location.location_id}/availability - {json.dumps(response)}')
         return LocationAvailability(location=location,
-                                    dates_available=[LocationAvailability.Availability(date_available=datetime.strptime(x['date'], "%Y-%m-%d").date(),
+                                    dates_available=[LocationAvailability.Availability(date_available=datetime.strptime(x['date'], '%Y-%m-%d').date(),
                                                                                        available=x['available'])
-                                                     for x in response_json['availability'] if x['available'] is True])
+                                                     for x in response['availability'] if x['available'] is True])
 
     def get_slots(self, location: Location, start_date: date) -> LocationAvailabilitySlots:
         body = {
