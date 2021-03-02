@@ -9,19 +9,12 @@ import pymongo
 from discord.ext import commands, tasks
 from pandas import isnull, DataFrame
 
+from appointmentNotification import AppointmentNotification
+from constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
+    NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
+    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION
+from exceptions import InvalidZipCode
 from myTurnCA import MyTurnCA
-
-
-class AppointmentNotification:
-    def __init__(self, channel_id: int, message: str, zip_code: int, user_id: int):
-        self.channel_id = channel_id
-        self.message = message
-        self.user_id = user_id
-        self.zip_code = zip_code
-
-
-class InvalidZipCode(commands.BadArgument):
-    pass
 
 
 class MyTurnCABot(commands.Bot):
@@ -38,7 +31,7 @@ class MyTurnCABot(commands.Bot):
 
 
 def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str, mongodb_port: str):
-    bot = MyTurnCABot(command_prefix='!', description='Bot to help you get a COVID-19 vaccination appointment in CA')
+    bot = MyTurnCABot(command_prefix=COMMAND_PREFIX, description=BOT_DESCRIPTION)
     logger = logging.getLogger(__name__)
     my_turn_ca = MyTurnCA()
     nomi = pgeocode.Nominatim('us')
@@ -80,27 +73,27 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
                                                      user_id=user_id))
             return
 
-    @bot.command()
+    @bot.command(brief=CANCEL_NOTIFICATION_BRIEF, description=CANCEL_NOTIFICATION_DESCRIPTION)
     async def cancel_notification(ctx: commands.Context, zip_code: int):
-        notifications = list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id, 'zip_code': zip_code}))
-        if not notifications:
+        notification = my_turn_ca_db.notifications.find_one({'user_id': ctx.author.id, 'zip_code': zip_code})
+        if not notification:
             await ctx.reply(f'You don\'t have any outstanding notification requests for zip code {zip_code}')
             return
 
-        my_turn_ca_db.notifications.delete_one({'_id': notifications[0]['_id']})
+        my_turn_ca_db.notifications.delete_one(notification)
         await ctx.reply(f'Your notification request for zip code {zip_code} has been canceled, '
                         f'see `!help notify` to request another')
 
-        bot.worker_processes[notifications[0]['pid']].kill()
-        bot.worker_processes[notifications[0]['pid']].join()
+        bot.worker_processes[notification['pid']].kill()
+        bot.worker_processes[notification['pid']].join()
 
-    @bot.command()
+    @bot.command(brief=NOTIFY_BRIEF, description=NOTIFY_DESCRIPTION)
     async def notify(ctx: commands.Context, zip_code: int):
         city = nomi.query_postal_code(zip_code)
         if not is_zip_code_valid(city):
             raise InvalidZipCode
 
-        if list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id, 'zip_code': zip_code})):
+        if my_turn_ca_db.notifications.find_one({'user_id': ctx.author.id, 'zip_code': zip_code}):
             await ctx.reply('You already have an outstanding notification request, '
                             'see `!help cancel_notification` to cancel it')
             return
@@ -117,7 +110,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
             'channel_id': ctx.channel.id
         })
 
-    @bot.command()
+    @bot.command(brief=GET_NOTIFICATIONS_DESCRIPTION, description=GET_NOTIFICATIONS_DESCRIPTION)
     async def get_notifications(ctx: commands.Context):
         notifications = list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id}))
         if not notifications:
@@ -144,7 +137,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
         except queue.Empty:
             pass
 
-    @bot.command()
+    @bot.command(brief=GET_LOCATIONS_DESCRIPTION, description=GET_LOCATIONS_DESCRIPTION)
     async def get_locations(ctx: commands.Context, zip_code: int):
         city = nomi.query_postal_code(zip_code)
         if not is_zip_code_valid(city):
@@ -161,7 +154,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
         await ctx.reply(message)
 
-    @bot.command()
+    @bot.command(brief=GET_APPOINTMENTS_BRIEF, description=GET_APPOINTMENTS_DESCRIPTION)
     async def get_appointments(ctx: commands.Context, zip_code: int):
         city = nomi.query_postal_code(zip_code)
         if not is_zip_code_valid(city):

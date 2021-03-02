@@ -1,54 +1,14 @@
+import functools
 import json
 import logging
 import operator
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import List
-import pytz
-import functools
 
+import pytz
 import requests
 
-URL = 'https://api.myturn.ca.gov/public'
-ELIGIBLE_REQUEST_BODY = {
-    'eligibilityQuestionResponse': [
-        {
-            'id': 'q.screening.18.yr.of.age',
-            'value': [
-                'q.screening.18.yr.of.age'
-            ],
-            'type': 'multi-select'
-        },
-        {
-            'id': 'q.screening.health.data',
-            'value': [
-                'q.screening.health.data'
-            ],
-            'type': 'multi-select'
-        },
-        {
-            'id': 'q.screening.privacy.statement',
-            'value': [
-                'q.screening.privacy.statement'
-            ],
-            'type': 'multi-select'
-        },
-        {
-            'id': 'q.screening.eligibility.age.range',
-            'value': '75 and older',
-            'type': 'single-select'
-        },
-        {
-            'id': 'q.screening.eligibility.industry',
-            'value': 'Other',
-            'type': 'single-select'
-        },
-        {
-            'id': 'q.screening.eligibility.county',
-            'value': 'Alameda',
-            'type': 'single-select'
-        }
-    ]
-}
+from constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY
 
 
 class Location:
@@ -93,8 +53,8 @@ class MyTurnCA:
         self.vaccine_data = self._get_vaccine_data()
 
     def _get_vaccine_data(self) -> str:
-        self.logger.info(f'sending request to {URL}/eligibility with body - {json.dumps(ELIGIBLE_REQUEST_BODY)}')
-        response = requests.post(url=f'{URL}/eligibility', json=ELIGIBLE_REQUEST_BODY).json()
+        self.logger.info(f'sending request to {MY_TURN_URL}/eligibility with body - {json.dumps(ELIGIBLE_REQUEST_BODY)}')
+        response = requests.post(url=f'{MY_TURN_URL}/eligibility', json=ELIGIBLE_REQUEST_BODY).json()
         self.logger.info(f'got response from /eligibility - {json.dumps(response)}')
 
         if response['eligible'] is False:
@@ -112,8 +72,8 @@ class MyTurnCA:
             'vaccineData': self.vaccine_data
         }
 
-        self.logger.info(f'sending request to {URL}/locations/search with body - {json.dumps(body)}')
-        response = requests.post(url=f'{URL}/locations/search', json=body).json()
+        self.logger.info(f'sending request to {MY_TURN_URL}/locations/search with body - {json.dumps(body)}')
+        response = requests.post(url=f'{MY_TURN_URL}/locations/search', json=body).json()
         self.logger.info(f'got response from /locations/search - {json.dumps(response)}')
 
         return [Location(location_id=x['extId'], name=x['name'], address=x['displayAddress'], booking_type=x['type'],
@@ -129,8 +89,8 @@ class MyTurnCA:
         }
 
         self.logger.info(
-            f'sending request to {URL}/locations/{location.location_id}/availability with body - {json.dumps(body)}')
-        response = requests.post(url=f'{URL}/locations/{location.location_id}/availability', json=body)
+            f'sending request to {MY_TURN_URL}/locations/{location.location_id}/availability with body - {json.dumps(body)}')
+        response = requests.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/availability', json=body)
         self.logger.info(f'got response from /locations/{location.location_id}/availability - {json.dumps(response.json())}')
 
         if response.status_code != requests.codes.OK:
@@ -148,9 +108,9 @@ class MyTurnCA:
         }
 
         self.logger.info(f'sending request to '
-                         f'{URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots '
+                         f'{MY_TURN_URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots '
                          f'with body - {json.dumps(body)}')
-        response = requests.post(url=f'{URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots',
+        response = requests.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots',
                                  json=body).json()
         self.logger.info(f'got response from /locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")} - {json.dumps(response)}')
 
