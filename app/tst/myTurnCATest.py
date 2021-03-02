@@ -1,12 +1,13 @@
-import responses
+from datetime import date
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
-from datetime import date
 
-from ..src.constants import MY_TURN_URL
-from ..src.myTurnCA import MyTurnCA, Location, LocationAvailability
+import responses
+
 from .constants import MOCK_VACCINE_DATA, EMPTY_LOCATIONS_RESPONSE, NON_EMPTY_LOCATION_RESPONSE, \
     EMPTY_LOCATION_AVAILABILITY_RESPONSE, UNAVAILABLE_LOCATION_AVAILABILITY_RESPONSE
+from ..src.constants import MY_TURN_URL
+from ..src.myTurnCA import MyTurnCA, Location, LocationAvailability
 
 
 class MyTurnCATest(TestCase):
