@@ -3,9 +3,9 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from datetime import date
 
-from app.src.constants import MY_TURN_URL
-from app.src.myTurnCA import MyTurnCA, Location, LocationAvailability
-from app.tst.constants import MOCK_VACCINE_DATA, EMPTY_LOCATIONS_RESPONSE, NON_EMPTY_LOCATION_RESPONSE, \
+from ..src.constants import MY_TURN_URL
+from ..src.myTurnCA import MyTurnCA, Location, LocationAvailability
+from .constants import MOCK_VACCINE_DATA, EMPTY_LOCATIONS_RESPONSE, NON_EMPTY_LOCATION_RESPONSE, \
     EMPTY_LOCATION_AVAILABILITY_RESPONSE, UNAVAILABLE_LOCATION_AVAILABILITY_RESPONSE
 
 

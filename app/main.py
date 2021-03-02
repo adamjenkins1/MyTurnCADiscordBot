@@ -3,8 +3,8 @@ import logging
 import os
 import sys
 
-import myTurnCABot
-from constants import DISCORD_BOT_TOKEN, MONGO_USER, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT
+from src import myTurnCABot
+from src.constants import DISCORD_BOT_TOKEN, MONGO_USER, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT
 
 ENV_VARS = {
     DISCORD_BOT_TOKEN: '',

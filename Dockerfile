@@ -5,4 +5,4 @@ RUN apk update \
     && apk add --no-cache gcc g++ musl-dev gfortran \
     && pip install --no-cache-dir -r requirements.txt
 
-CMD [ "/app/src/main.py" ]
+CMD [ "/app/main.py" ]
