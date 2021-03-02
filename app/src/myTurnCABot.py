@@ -93,7 +93,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
         if not is_zip_code_valid(city):
             raise InvalidZipCode
 
-        if my_turn_ca_db.notifications.find_one({'user_id': ctx.author.id, 'zip_code': zip_code}):
+        if my_turn_ca_db.notifications.find_one({'user_id': ctx.author.id}):
             await ctx.reply('You already have an outstanding notification request, '
                             'see `!help cancel_notification` to cancel it')
             return
