@@ -12,7 +12,7 @@ from pandas import isnull, DataFrame
 from .appointmentNotification import AppointmentNotification
 from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
-    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION
+    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, NOTIFICATION_WAIT_PERIOD
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
@@ -56,7 +56,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
                                                        longitude=zip_code_query['longitude'],
                                                        start_date=start_date, end_date=end_date)
             if not appointments:
-                time.sleep(120)
+                time.sleep(NOTIFICATION_WAIT_PERIOD)
                 continue
 
             message = f'Hey <@{user_id}>, I found available openings at these locations from ' \

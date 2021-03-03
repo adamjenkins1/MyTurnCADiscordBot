@@ -60,3 +60,4 @@ GET_LOCATIONS_DESCRIPTION = 'Lists vaccination locations near the given zip code
 GET_APPOINTMENTS_BRIEF = 'Lists appointments at nearby vaccination locations'
 GET_APPOINTMENTS_DESCRIPTION = 'Lists how many appointments are available within the next week at vaccination ' \
                                'locations near the given zip code'
+NOTIFICATION_WAIT_PERIOD = 30
