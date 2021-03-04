@@ -128,12 +128,18 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
         try:
             notification = reminder_queue.get(block=False)
             logger.info(f'found notification in queue, sending message to channel - {notification.__dict__}')
-            await bot.get_channel(notification.channel_id).send(notification.message)
+            channel = bot.get_channel(notification.channel_id)
             my_turn_ca_db.notifications.delete_one({
                 'user_id': notification.user_id,
                 'zip_code': notification.zip_code,
                 'channel_id': notification.channel_id
             })
+
+            if channel is None:
+                logger.info(f'channel {notification.channel_id} does not exist, maybe it was deleted...?')
+                return
+
+            await channel.send(notification.message)
         except queue.Empty:
             pass
 
