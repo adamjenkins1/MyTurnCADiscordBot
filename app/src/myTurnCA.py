@@ -56,9 +56,15 @@ class LocationAvailabilitySlots:
             self.local_start_time = local_start_time
             self.duration_seconds = duration_seconds
 
+        def __eq__(self, other):
+            return self.local_start_time == other.local_start_time and self.duration_seconds == other.duration_seconds
+
     def __init__(self, location: Location, slots: List[AvailabilitySlots]):
         self.location = location
         self.slots = slots
+
+    def __eq__(self, other):
+        return self.location == other.location and self.slots == other.slots
 
 
 class MyTurnCA:
