@@ -7,8 +7,9 @@ from typing import List
 
 import pytz
 import requests
+from requests.adapters import HTTPAdapter
 
-from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY
+from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY, REQUESTS_MAX_RETRIES
 
 
 class Location:
@@ -70,11 +71,13 @@ class LocationAvailabilitySlots:
 class MyTurnCA:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.session = requests.Session()
+        self.session.mount('https://', HTTPAdapter(max_retries=REQUESTS_MAX_RETRIES))
         self.vaccine_data = self._get_vaccine_data()
 
     def _get_vaccine_data(self) -> str:
         self.logger.info(f'sending request to {MY_TURN_URL}/eligibility with body - {json.dumps(ELIGIBLE_REQUEST_BODY)}')
-        response = requests.post(url=f'{MY_TURN_URL}/eligibility', json=ELIGIBLE_REQUEST_BODY).json()
+        response = self.session.post(url=f'{MY_TURN_URL}/eligibility', json=ELIGIBLE_REQUEST_BODY).json()
         self.logger.info(f'got response from /eligibility - {json.dumps(response)}')
 
         if response['eligible'] is False:
@@ -93,7 +96,7 @@ class MyTurnCA:
         }
 
         self.logger.info(f'sending request to {MY_TURN_URL}/locations/search with body - {json.dumps(body)}')
-        response = requests.post(url=f'{MY_TURN_URL}/locations/search', json=body).json()
+        response = self.session.post(url=f'{MY_TURN_URL}/locations/search', json=body).json()
         self.logger.info(f'got response from /locations/search - {json.dumps(response)}')
 
         return [Location(location_id=x['extId'], name=x['name'], address=x['displayAddress'], booking_type=x['type'],
@@ -110,7 +113,7 @@ class MyTurnCA:
 
         self.logger.info(
             f'sending request to {MY_TURN_URL}/locations/{location.location_id}/availability with body - {json.dumps(body)}')
-        response = requests.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/availability', json=body).json()
+        response = self.session.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/availability', json=body).json()
         self.logger.info(f'got response from /locations/{location.location_id}/availability - {json.dumps(response)}')
         return LocationAvailability(location=location,
                                     dates_available=[LocationAvailability.Availability(date_available=datetime.strptime(x['date'], '%Y-%m-%d').date(),
@@ -125,8 +128,8 @@ class MyTurnCA:
         self.logger.info(f'sending request to '
                          f'{MY_TURN_URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots '
                          f'with body - {json.dumps(body)}')
-        response = requests.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots',
-                                 json=body).json()
+        response = self.session.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots',
+                                     json=body).json()
         self.logger.info(f'got response from /locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")} - {json.dumps(response)}')
 
         return LocationAvailabilitySlots(location=location,

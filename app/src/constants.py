@@ -1,4 +1,5 @@
 # MyTurnCA constants
+REQUESTS_MAX_RETRIES = 100
 MY_TURN_URL = 'https://api.myturn.ca.gov/public'
 ELIGIBLE_REQUEST_BODY = {
     'eligibilityQuestionResponse': [
