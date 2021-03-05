@@ -53,11 +53,11 @@ MIXED_AVAILABILITY_SLOTS_RESPONSE = {
     'slotsWithAvailability': [
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now() - timedelta(hours=5)).strftime('%H:%M:%S')
+            'localStartTime': (datetime.now() - timedelta(hours=1)).strftime('%H:%M:%S')
         },
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now() + timedelta(hours=5)).strftime('%H:%M:%S')
+            'localStartTime': (datetime.now() + timedelta(hours=2)).strftime('%H:%M:%S')
         }
     ]
 }
