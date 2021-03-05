@@ -1,8 +1,5 @@
-FROM python:3.9.2-alpine
+FROM python:3.9.2-slim
 ADD ./requirements.txt ./
-RUN apk update \
-    && apk add --no-cache gcc g++ musl-dev gfortran \
-    && pip install --no-cache-dir -r requirements.txt
-
+RUN pip install --no-cache-dir -r requirements.txt
 COPY ./app /app
 CMD [ "/app/main.py" ]
