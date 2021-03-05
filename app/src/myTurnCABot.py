@@ -1,3 +1,4 @@
+"""Discord bot to help you find a COVID-19 vaccination appointment in CA"""
 import logging
 import multiprocessing
 import queue
@@ -9,7 +10,6 @@ import pymongo
 from discord.ext import commands, tasks
 from pandas import isnull, DataFrame
 
-from .appointmentNotification import AppointmentNotification
 from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
     GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, NOTIFICATION_WAIT_PERIOD
@@ -17,12 +17,23 @@ from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
 
+class AppointmentNotification:
+    """Class which stores required information for the bot to notify users of available appointments"""
+    def __init__(self, channel_id: int, message: str, zip_code: int, user_id: int):
+        self.channel_id = channel_id
+        self.message = message
+        self.user_id = user_id
+        self.zip_code = zip_code
+
+
 class MyTurnCABot(commands.Bot):
+    """Main bot class"""
     def __init__(self, command_prefix, **options):
         super().__init__(command_prefix, **options)
         self.worker_processes = {}
 
     async def close(self):
+        """Cleans up worker processes to avoid leaving zombie processes on the host"""
         for process in self.worker_processes.values():
             process.kill()
             process.join()
@@ -31,15 +42,17 @@ class MyTurnCABot(commands.Bot):
 
 
 def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str, mongodb_port: str):
+    """Main bot driver method"""
     bot = MyTurnCABot(command_prefix=COMMAND_PREFIX, description=BOT_DESCRIPTION)
     logger = logging.getLogger(__name__)
     my_turn_ca = MyTurnCA()
     nomi = pgeocode.Nominatim('us')
-    reminder_queue = multiprocessing.Queue()
+    notification_queue = multiprocessing.Queue()
     mongodb = pymongo.MongoClient(f'mongodb://{mongodb_user}:{mongodb_password}@{mongodb_host}:{mongodb_port}')
     my_turn_ca_db = mongodb.my_turn_ca
 
     def is_zip_code_valid(zip_code_result: DataFrame):
+        """Returns whether or not the provided DataFrame represents a valid CA zip code"""
         return not any([
             isnull(zip_code_result['latitude']),
             isnull(zip_code_result['longitude']),
@@ -49,6 +62,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     def add_notification_generator(channel_id: int, user_id: int, zip_code_query: DataFrame,
                                    result_queue: multiprocessing.Queue):
+        """Function run by worker processes to notify users when available appointments are found"""
         while True:
             start_date = date.today()
             end_date = start_date + timedelta(weeks=1)
@@ -75,6 +89,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.command(brief=CANCEL_NOTIFICATION_BRIEF, description=CANCEL_NOTIFICATION_DESCRIPTION)
     async def cancel_notification(ctx: commands.Context, zip_code: int):
+        """Bot command to cancel an outstanding notification"""
         notification = my_turn_ca_db.notifications.find_one({'user_id': ctx.author.id, 'zip_code': zip_code})
         if not notification:
             await ctx.reply(f'You don\'t have any outstanding notification requests for zip code {zip_code}')
@@ -89,6 +104,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.command(brief=NOTIFY_BRIEF, description=NOTIFY_DESCRIPTION)
     async def notify(ctx: commands.Context, zip_code: int):
+        """Bot command to request to be notified when appointments are available near the given zip code"""
         city = nomi.query_postal_code(zip_code)
         if not is_zip_code_valid(city):
             raise InvalidZipCode
@@ -100,7 +116,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
         await ctx.reply(f'OK, I\'ll let you know when I find appointments in your area')
         worker = multiprocessing.Process(target=add_notification_generator,
-                                         args=(ctx.channel.id, ctx.author.id, city, reminder_queue))
+                                         args=(ctx.channel.id, ctx.author.id, city, notification_queue))
         worker.start()
         bot.worker_processes[worker.pid] = worker
         my_turn_ca_db.notifications.insert_one({
@@ -112,6 +128,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.command(brief=GET_NOTIFICATIONS_DESCRIPTION, description=GET_NOTIFICATIONS_DESCRIPTION)
     async def get_notifications(ctx: commands.Context):
+        """Bot command to retrieve a user's outstanding notifications"""
         notifications = list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id}))
         if not notifications:
             await ctx.reply('You don\'t have any outstanding notification requests')
@@ -122,11 +139,13 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @tasks.loop(seconds=5)
     async def poll_notifications():
+        """Background task to check if worker processes have populated the notification queue"""
+        # if any worker processes have exited, remove them from the worker processes dictionary
         [bot.worker_processes.pop(pid) for pid in [pid for pid in bot.worker_processes.keys()
                                                    if not bot.worker_processes[pid].is_alive()]]
 
         try:
-            notification = reminder_queue.get(block=False)
+            notification = notification_queue.get(block=False)
             logger.info(f'found notification in queue, sending message to channel - {notification.__dict__}')
             channel = bot.get_channel(notification.channel_id)
             my_turn_ca_db.notifications.delete_one({
@@ -145,6 +164,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.command(brief=GET_LOCATIONS_DESCRIPTION, description=GET_LOCATIONS_DESCRIPTION)
     async def get_locations(ctx: commands.Context, zip_code: int):
+        """Bot command to list available vaccination locations near the given zip code"""
         city = nomi.query_postal_code(zip_code)
         if not is_zip_code_valid(city):
             raise InvalidZipCode
@@ -162,6 +182,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.command(brief=GET_APPOINTMENTS_BRIEF, description=GET_APPOINTMENTS_DESCRIPTION)
     async def get_appointments(ctx: commands.Context, zip_code: int):
+        """Bot command to list available appointments at vaccination locations near the given zip code"""
         city = nomi.query_postal_code(zip_code)
         if not is_zip_code_valid(city):
             raise InvalidZipCode
@@ -189,6 +210,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
     @get_notifications.error
     @cancel_notification.error
     async def command_error_handler(ctx: commands.Context, error: commands.CommandError):
+        """Bot command error handler to handle expected exceptions"""
         if isinstance(error, commands.TooManyArguments) or isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(str(error))
             return
@@ -203,6 +225,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.event
     async def on_command_error(ctx: commands.Context, error: commands.UserInputError):
+        """General bot error handler to handle unexpected exceptions"""
         if isinstance(error, commands.CommandNotFound):
             await ctx.reply(f'`{ctx.message.content}` isn\'t a valid command, see `!help` for supported commands')
             return
@@ -214,6 +237,8 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.event
     async def on_ready():
+        """Bot event to start poll_notifications background task and create worker processes to handle
+        any outstanding notifications"""
         if not poll_notifications.is_running():
             poll_notifications.start()
 
@@ -224,7 +249,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
                                                  args=(notification['channel_id'],
                                                        notification['user_id'],
                                                        nomi.query_postal_code(notification['zip_code']),
-                                                       reminder_queue))
+                                                       notification_queue))
                 worker.start()
                 bot.worker_processes[worker.pid] = worker
                 my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'pid': worker.pid}})

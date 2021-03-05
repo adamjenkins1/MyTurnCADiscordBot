@@ -1,3 +1,4 @@
+"""Python API wrapper around My Turn CA API"""
 import functools
 import json
 import logging
@@ -13,6 +14,7 @@ from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY, REQUESTS_MAX_RETRIES
 
 
 class Location:
+    """Class to represent a vaccination location"""
     def __init__(self, location_id: str, name: str, booking_type: str, vaccine_data: str,
                  distance: float, address: str):
         self.location_id = location_id
@@ -35,32 +37,18 @@ class Location:
 
 
 class LocationAvailability:
-    class Availability:
-        def __init__(self, date_available: date, available: bool):
-            self.date = date_available
-            self.available = available
-
-        def __eq__(self, other):
-            return self.date == other.date and self.available == other.available
-
+    """Class to represent a vaccination location's availability"""
     def __eq__(self, other):
         return self.location == other.location and self.dates_available == other.dates_available
 
-    def __init__(self, location: Location, dates_available: List[Availability]):
+    def __init__(self, location: Location, dates_available: List[date]):
         self.location = location
         self.dates_available = dates_available
 
 
 class LocationAvailabilitySlots:
-    class AvailabilitySlots:
-        def __init__(self, local_start_time: datetime, duration_seconds: int):
-            self.local_start_time = local_start_time
-            self.duration_seconds = duration_seconds
-
-        def __eq__(self, other):
-            return self.local_start_time == other.local_start_time and self.duration_seconds == other.duration_seconds
-
-    def __init__(self, location: Location, slots: List[AvailabilitySlots]):
+    """Class to represent individual available appointments at a given vaccination location"""
+    def __init__(self, location: Location, slots: List[datetime]):
         self.location = location
         self.slots = slots
 
@@ -69,6 +57,7 @@ class LocationAvailabilitySlots:
 
 
 class MyTurnCA:
+    """Main API class"""
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.session = requests.Session()
@@ -76,6 +65,7 @@ class MyTurnCA:
         self.vaccine_data = self._get_vaccine_data()
 
     def _get_vaccine_data(self) -> str:
+        """Retrieve initial vaccine data"""
         self.logger.info(f'sending request to {MY_TURN_URL}/eligibility with body - {json.dumps(ELIGIBLE_REQUEST_BODY)}')
         response = self.session.post(url=f'{MY_TURN_URL}/eligibility', json=ELIGIBLE_REQUEST_BODY).json()
         self.logger.info(f'got response from /eligibility - {json.dumps(response)}')
@@ -86,6 +76,7 @@ class MyTurnCA:
         return response['vaccineData']
 
     def get_locations(self, latitude: float, longitude: float) -> List[Location]:
+        """Gets available locations near the given coordinates"""
         body = {
             'location': {
                 'lat': latitude,
@@ -104,6 +95,7 @@ class MyTurnCA:
                 for x in response['locations']]
 
     def get_availability(self, location: Location, start_date: date, end_date: date) -> LocationAvailability:
+        """Gets a given vaccination location's availability"""
         body = {
             'startDate': start_date.strftime('%Y-%m-%d'),
             'endDate': end_date.strftime('%Y-%m-%d'),
@@ -116,11 +108,11 @@ class MyTurnCA:
         response = self.session.post(url=f'{MY_TURN_URL}/locations/{location.location_id}/availability', json=body).json()
         self.logger.info(f'got response from /locations/{location.location_id}/availability - {json.dumps(response)}')
         return LocationAvailability(location=location,
-                                    dates_available=[LocationAvailability.Availability(date_available=datetime.strptime(x['date'], '%Y-%m-%d').date(),
-                                                                                       available=x['available'])
+                                    dates_available=[datetime.strptime(x['date'], '%Y-%m-%d').date()
                                                      for x in response['availability'] if x['available'] is True])
 
     def get_slots(self, location: Location, start_date: date) -> LocationAvailabilitySlots:
+        """Gets a given location's available appointments"""
         body = {
             'vaccineData': location.vaccine_data
         }
@@ -133,13 +125,12 @@ class MyTurnCA:
         self.logger.info(f'got response from /locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")} - {json.dumps(response)}')
 
         return LocationAvailabilitySlots(location=location,
-                                         slots=[LocationAvailabilitySlots.AvailabilitySlots(
-                                             duration_seconds=x['durationSeconds'],
-                                             local_start_time=self._combine_date_and_time(start_date, x['localStartTime']))
-                                             for x in response['slotsWithAvailability']
-                                             if self._combine_date_and_time(start_date, x['localStartTime']) > datetime.now(tz=pytz.timezone('US/Pacific'))])
+                                         slots=[self._combine_date_and_time(start_date, x['localStartTime'])
+                                                for x in response['slotsWithAvailability']
+                                                if self._combine_date_and_time(start_date, x['localStartTime']) > datetime.now(tz=pytz.timezone('US/Pacific'))])
 
     def get_appointments(self, latitude: float, longitude: float, start_date: date, end_date: date) -> List[LocationAvailabilitySlots]:
+        """Retrieves available appointments from all vaccination locations near the given coordinates"""
         locations = self.get_locations(latitude=latitude, longitude=longitude)
         if not locations:
             return []
@@ -154,11 +145,12 @@ class MyTurnCA:
                 continue
 
             location_appointments = [location_appointment for location_appointment in
-                                     [self.get_slots(location=location, start_date=day_available.date) for day_available in days_available]
-                                     if location_appointment.slots]
+                                     [self.get_slots(location=location, start_date=day_available)
+                                      for day_available in days_available] if location_appointment.slots]
             if not location_appointments:
                 continue
 
+            # combines appointments on different days for the same location
             appointments.append(LocationAvailabilitySlots(location=location_appointments[0].location,
                                                           slots=functools.reduce(operator.add,
                                                                                  [location_appointment.slots for location_appointment in location_appointments])))
@@ -167,5 +159,6 @@ class MyTurnCA:
 
     @staticmethod
     def _combine_date_and_time(start_date: date, timestamp: str) -> datetime:
+        """Private helper function to combine a date and timestamp"""
         return datetime.combine(start_date, datetime.strptime(timestamp, '%H:%M:%S').time(),
                                 tzinfo=pytz.timezone('US/Pacific'))

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Main driver for MyTurnBot"""
 import logging
 import os
 import sys
