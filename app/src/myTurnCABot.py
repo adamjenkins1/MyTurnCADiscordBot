@@ -242,17 +242,23 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
         if not poll_notifications.is_running():
             poll_notifications.start()
 
+        # if we disconnected and reconnected, kill old workers in case they got stuck
+        for process in bot.worker_processes.values():
+            process.kill()
+            process.join()
+
+        bot.worker_processes = {}
+        # for every notification request that hasn't been fulfilled, create a new worker process
         notification_cursor = my_turn_ca_db.notifications.find()
         for notification in notification_cursor:
-            if notification['pid'] not in bot.worker_processes:
-                worker = multiprocessing.Process(target=add_notification_generator,
-                                                 args=(notification['channel_id'],
-                                                       notification['user_id'],
-                                                       nomi.query_postal_code(notification['zip_code']),
-                                                       notification_queue))
-                worker.start()
-                bot.worker_processes[worker.pid] = worker
-                my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'pid': worker.pid}})
+            worker = multiprocessing.Process(target=add_notification_generator,
+                                             args=(notification['channel_id'],
+                                                   notification['user_id'],
+                                                   nomi.query_postal_code(notification['zip_code']),
+                                                   notification_queue))
+            worker.start()
+            bot.worker_processes[worker.pid] = worker
+            my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'pid': worker.pid}})
 
         notification_cursor.close()
 
