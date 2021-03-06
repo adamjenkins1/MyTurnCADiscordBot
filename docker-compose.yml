@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  myturncabot:
+    build: .
+    environment:
+      DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
+      MONGO_USER: "${MONGO_USER}"
+      MONGO_PASSWORD: "${MONGO_PASSWORD}"
+      MONGO_HOST: mongo
+      MONGO_PORT: "${MONGO_PORT}"
+  mongo:
+    image: "mongo:bionic"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_USER}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"
+    volumes:
+      - mongo_db:/data/db/
+    ports:
+      - "${MONGO_PORT}:${MONGO_PORT}"
+volumes:
+  mongo_db:
