@@ -1,8 +1,8 @@
-name: Docker Build and Push on push
+name: Docker Build and Push on release
 on:
-  push:
-    branches:
-      - main
+  release:
+    types:
+      - published
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -29,4 +29,4 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: adamjenkins1701/myturncadiscordbot:latest
+          tags: adamjenkins1701/myturncadiscordbot:${{ github.event.release.tag_name }}
