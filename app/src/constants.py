@@ -1,7 +1,14 @@
+from urllib3.util import Retry
+
 """Constants module"""
 # MyTurnCA constants
 REQUESTS_MAX_RETRIES = 100
-MY_TURN_URL = 'https://api.myturn.ca.gov/public'
+MY_TURN_URL = 'https://api.myturn.ca.gov/public/'
+DEFAULT_RETRY_STRATEGY = Retry(
+    total=REQUESTS_MAX_RETRIES,
+    backoff_factor=0.2,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=frozenset(['GET', 'POST']))
 ELIGIBLE_REQUEST_BODY = {
     'eligibilityQuestionResponse': [
         {

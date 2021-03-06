@@ -27,13 +27,13 @@ class MyTurnCATest(TestCase):
     @responses.activate
     def test_no_locations(self):
         """Tests that no locations are returned given empty response"""
-        responses.add(method=responses.POST, url=f'{MY_TURN_URL}/locations/search', json=EMPTY_LOCATIONS_RESPONSE)
+        responses.add(method=responses.POST, url=f'{MY_TURN_URL}locations/search', json=EMPTY_LOCATIONS_RESPONSE)
         self.assertEqual(self.my_turn_ca.get_locations(1, 2), [])
 
     @responses.activate
     def test_locations_found(self):
         """Tests that locations are properly returned given non-empty response"""
-        responses.add(responses.POST, f'{MY_TURN_URL}/locations/search', json=NON_EMPTY_LOCATION_RESPONSE)
+        responses.add(responses.POST, f'{MY_TURN_URL}locations/search', json=NON_EMPTY_LOCATION_RESPONSE)
         self.assertEqual(self.my_turn_ca.get_locations(1, 2),
                          [Location(location_id=location['extId'],
                                    name=location['name'],
@@ -47,7 +47,7 @@ class MyTurnCATest(TestCase):
     def test_no_availability(self):
         """Tests that no dates are returned given empty response"""
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}/locations/{TEST_LOCATION.location_id}/availability',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/availability',
                       json=EMPTY_LOCATION_AVAILABILITY_RESPONSE)
         self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, date.today(), date.today()),
                          LocationAvailability(location=TEST_LOCATION, dates_available=[]))
@@ -56,7 +56,7 @@ class MyTurnCATest(TestCase):
     def test_no_availability_given_only_unavailable_dates(self):
         """Tests that no dates are returned given only unavailable dates"""
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}/locations/{TEST_LOCATION.location_id}/availability',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/availability',
                       json=UNAVAILABLE_LOCATION_AVAILABILITY_RESPONSE)
         self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, date.today(), date.today()),
                          LocationAvailability(location=TEST_LOCATION, dates_available=[]))
@@ -65,7 +65,7 @@ class MyTurnCATest(TestCase):
     def test_availability_given_mixed_dates(self):
         """Tests that unavailable dates are properly filtered out and available dates are returned"""
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}/locations/{TEST_LOCATION.location_id}/availability',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/availability',
                       json=MIXED_LOCATION_AVAILABILITY_RESPONSE)
         self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, date.today(), date.today()),
                          LocationAvailability(location=TEST_LOCATION,
@@ -77,7 +77,7 @@ class MyTurnCATest(TestCase):
         """Tests that no slots are returned given empty response"""
         today = date.today()
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}/locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
                       json=EMPTY_AVAILABILITY_SLOTS_RESPONSE)
         self.assertEqual(self.my_turn_ca.get_slots(TEST_LOCATION, today),
                          LocationAvailabilitySlots(location=TEST_LOCATION, slots=[]))
@@ -87,7 +87,7 @@ class MyTurnCATest(TestCase):
         """Tests that no slots are returned given slots that already occurred"""
         today = date.today()
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}/locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
                       json=OLD_AVAILABILITY_SLOTS_RESPONSE)
         self.assertEqual(self.my_turn_ca.get_slots(TEST_LOCATION, today),
                          LocationAvailabilitySlots(location=TEST_LOCATION, slots=[]))
@@ -97,7 +97,7 @@ class MyTurnCATest(TestCase):
         """Tests that upcoming slots are returned and old slots are filtered out"""
         today = date.today()
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}/locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
                       json=MIXED_AVAILABILITY_SLOTS_RESPONSE)
         response = self.my_turn_ca.get_slots(TEST_LOCATION, today)
         self.assertEqual(response.location, TEST_LOCATION)

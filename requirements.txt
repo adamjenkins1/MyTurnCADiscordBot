@@ -6,3 +6,4 @@ requests==2.25.1
 pandas==1.2.3
 responses==0.12.1
 coverage==5.5
+requests_toolbelt==0.9.1

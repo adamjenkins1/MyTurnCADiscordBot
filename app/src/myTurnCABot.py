@@ -28,6 +28,7 @@ class AppointmentNotification:
 
 
 class NotificationProcess:
+    """Class to represent a background notification process"""
     def __init__(self, process: multiprocessing.Process, target: Callable, kwargs: dict):
         self.process = process
         self.target = target
