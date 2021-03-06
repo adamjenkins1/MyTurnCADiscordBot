@@ -4,6 +4,7 @@ import multiprocessing
 import queue
 import time
 from datetime import date, timedelta
+from typing import Callable
 
 import pgeocode
 import pymongo
@@ -26,6 +27,16 @@ class AppointmentNotification:
         self.zip_code = zip_code
 
 
+class NotificationProcess:
+    def __init__(self, process: multiprocessing.Process, target: Callable, kwargs: dict):
+        self.process = process
+        self.target = target
+        self.kwargs = kwargs
+
+    def __str__(self):
+        return f'{self.process.pid}: {self.target.__name__}, {self.kwargs}'
+
+
 class MyTurnCABot(commands.Bot):
     """Main bot class"""
     def __init__(self, command_prefix, **options):
@@ -34,9 +45,9 @@ class MyTurnCABot(commands.Bot):
 
     async def close(self):
         """Cleans up worker processes to avoid leaving zombie processes on the host"""
-        for process in self.worker_processes.values():
-            process.kill()
-            process.join()
+        for worker in self.worker_processes.values():
+            worker.process.kill()
+            worker.process.join()
 
         await super().close()
 
@@ -99,8 +110,9 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
         await ctx.reply(f'Your notification request for zip code {zip_code} has been canceled, '
                         f'see `!help notify` to request another')
 
-        bot.worker_processes[notification['pid']].kill()
-        bot.worker_processes[notification['pid']].join()
+        bot.worker_processes[notification['pid']].process.kill()
+        bot.worker_processes[notification['pid']].process.join()
+        bot.worker_processes.pop(notification['pid'])
 
     @bot.command(brief=NOTIFY_BRIEF, description=NOTIFY_DESCRIPTION)
     async def notify(ctx: commands.Context, zip_code: int):
@@ -115,10 +127,17 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
             return
 
         await ctx.reply(f'OK, I\'ll let you know when I find appointments in your area')
-        worker = multiprocessing.Process(target=add_notification_generator,
-                                         args=(ctx.channel.id, ctx.author.id, city, notification_queue))
+        kwargs = {
+            'channel_id': ctx.channel.id,
+            'user_id': ctx.author.id,
+            'zip_code_query': city,
+            'result_queue': notification_queue
+        }
+        worker = multiprocessing.Process(target=add_notification_generator, kwargs=kwargs)
         worker.start()
-        bot.worker_processes[worker.pid] = worker
+        bot.worker_processes[worker.pid] = NotificationProcess(process=worker,
+                                                               target=add_notification_generator,
+                                                               kwargs=kwargs)
         my_turn_ca_db.notifications.insert_one({
             'user_id': ctx.author.id,
             'zip_code': zip_code,
@@ -138,12 +157,45 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
                         f'- {", ".join([str(notification["zip_code"]) for notification in notifications])}')
 
     @tasks.loop(seconds=5)
+    async def check_workers():
+        # remove any worker processes that successfully exited
+        [bot.worker_processes.pop(pid) for pid in [pid for pid in bot.worker_processes.keys()
+                                                   if not bot.worker_processes[pid].process.is_alive()
+                                                   and bot.worker_processes[pid].process.exitcode == 0]]
+
+        # create replacement processes for those that failed
+        failed_workers = [pid for pid in bot.worker_processes.keys() if not bot.worker_processes[pid].process.is_alive()
+                          and bot.worker_processes[pid].process.exitcode != 0]
+        if not failed_workers:
+            return
+
+        for pid in failed_workers:
+            failed_worker = bot.worker_processes[pid]
+            new_worker = multiprocessing.Process(target=failed_worker.target,
+                                                 kwargs=failed_worker.kwargs)
+            new_worker.start()
+            bot.worker_processes[new_worker.pid] = NotificationProcess(process=new_worker,
+                                                                       target=failed_worker.target,
+                                                                       kwargs=failed_worker.kwargs)
+            logger.info(f'Process {str(failed_worker)} failed, retrying with new process - '
+                        f'{str(bot.worker_processes[new_worker.pid])}')
+            my_turn_ca_db.notifications.update_one(
+                {
+                    'user_id': failed_worker.kwargs['user_id'],
+                    'zip_code': int(failed_worker.kwargs['zip_code_query']['postal_code']),
+                    'channel_id': failed_worker.kwargs['channel_id'],
+                    'pid': pid
+                },
+                {
+                    '$set': {'pid': new_worker.pid}
+                }
+            )
+
+            bot.worker_processes.pop(pid)
+
+    @tasks.loop(seconds=5)
     async def poll_notifications():
         """Background task to check if worker processes have populated the notification queue"""
-        # if any worker processes have exited, remove them from the worker processes dictionary
-        [bot.worker_processes.pop(pid) for pid in [pid for pid in bot.worker_processes.keys()
-                                                   if not bot.worker_processes[pid].is_alive()]]
-
         try:
             notification = notification_queue.get(block=False)
             logger.info(f'found notification in queue, sending message to channel - {notification.__dict__}')
@@ -239,9 +291,6 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
     async def on_ready():
         """Bot event to start poll_notifications background task and create worker processes to handle
         any outstanding notifications"""
-        if not poll_notifications.is_running():
-            poll_notifications.start()
-
         # if we disconnected and reconnected, kill old workers in case they got stuck
         for process in bot.worker_processes.values():
             process.kill()
@@ -251,15 +300,20 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
         # for every notification request that hasn't been fulfilled, create a new worker process
         notification_cursor = my_turn_ca_db.notifications.find()
         for notification in notification_cursor:
-            worker = multiprocessing.Process(target=add_notification_generator,
-                                             args=(notification['channel_id'],
-                                                   notification['user_id'],
-                                                   nomi.query_postal_code(notification['zip_code']),
-                                                   notification_queue))
+            kwargs = {
+                'channel_id': notification['channel_id'],
+                'user_id': notification['user_id'],
+                'zip_code_query': nomi.query_postal_code(notification['zip_code']),
+                'result_queue': notification_queue
+            }
+            worker = multiprocessing.Process(target=add_notification_generator, kwargs=kwargs)
             worker.start()
-            bot.worker_processes[worker.pid] = worker
+            bot.worker_processes[worker.pid] = NotificationProcess(process=worker,
+                                                                   target=add_notification_generator,
+                                                                   kwargs=kwargs)
             my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'pid': worker.pid}})
 
         notification_cursor.close()
+        [task.start() for task in [poll_notifications, check_workers] if not task.is_running()]
 
     bot.run(token)
