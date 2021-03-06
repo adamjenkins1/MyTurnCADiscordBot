@@ -8,6 +8,7 @@ from typing import Callable
 
 import pgeocode
 import pymongo
+from discord.errors import NotFound, Forbidden
 from discord.ext import commands, tasks
 from pandas import isnull, DataFrame
 
@@ -197,23 +198,28 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
     @tasks.loop(seconds=5)
     async def poll_notifications():
         """Background task to check if worker processes have populated the notification queue"""
+        notification = object()
         try:
             notification = notification_queue.get(block=False)
             logger.info(f'found notification in queue, sending message to channel - {notification.__dict__}')
-            channel = bot.get_channel(notification.channel_id)
+            channel = await bot.fetch_channel(notification.channel_id)
+            await channel.send(notification.message)
             my_turn_ca_db.notifications.delete_one({
                 'user_id': notification.user_id,
                 'zip_code': notification.zip_code,
                 'channel_id': notification.channel_id
             })
-
-            if channel is None:
-                logger.info(f'channel {notification.channel_id} does not exist, maybe it was deleted...?')
-                return
-
-            await channel.send(notification.message)
         except queue.Empty:
             pass
+        except NotFound:
+            logger.error(f'channel {notification.channel_id} was not found, maybe it was deleted...?')
+        except Forbidden:
+            logger.error(f'we don\'t have sufficient privileges to fetch channel {notification.channel_id}')
+
+    @tasks.loop(seconds=10)
+    async def start_tasks():
+        """Task to start/restart other tasks should they fail"""
+        [task.start() for task in [poll_notifications, check_workers] if not task.is_running()]
 
     @bot.command(brief=GET_LOCATIONS_DESCRIPTION, description=GET_LOCATIONS_DESCRIPTION)
     async def get_locations(ctx: commands.Context, zip_code: int):
@@ -290,8 +296,10 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
 
     @bot.event
     async def on_ready():
-        """Bot event to start poll_notifications background task and create worker processes to handle
-        any outstanding notifications"""
+        """Bot event to start background task and create worker processes to handle any outstanding notifications"""
+        # stop running tasks to make sure we aren't crossing streams
+        [task.stop() for task in [start_tasks, poll_notifications, check_workers] if task.is_running()]
+
         # if we disconnected and reconnected, kill old workers in case they got stuck
         for process in bot.worker_processes.values():
             process.kill()
@@ -314,7 +322,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
                                                                    kwargs=kwargs)
             my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'pid': worker.pid}})
 
+        start_tasks.start()
         notification_cursor.close()
-        [task.start() for task in [poll_notifications, check_workers] if not task.is_running()]
 
     bot.run(token)
