@@ -1,3 +1,8 @@
+![GitHub](https://img.shields.io/github/license/adamjenkins1/MyTurnCADiscordBot) 
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/adamjenkins1/MyTurnCADiscordBot/Docker%20Build%20and%20Push%20on%20push)
+![Requires.io](https://img.shields.io/requires/github/adamjenkins1/MyTurnCADiscordBot)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/adamjenkins1/MyTurnCADiscordBot?sort=semver)
+
 ## MyTurnCADiscordBot
 ### Discord bot to help you find a COVID-19 vaccination appointment near you using California's My Turn system (https://myturn.ca.gov)
 
