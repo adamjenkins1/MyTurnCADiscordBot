@@ -82,7 +82,7 @@ class MyTurnCA:
                 'lat': latitude,
                 'lng': longitude
             },
-            'fromDate': date.today().strftime('%Y-%m-%d'),
+            'fromDate': datetime.now(tz=pytz.timezone('US/Pacific')).strftime('%Y-%m-%d'),
             'vaccineData': self.vaccine_data
         }
 

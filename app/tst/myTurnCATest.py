@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
+import pytz
 import responses
 
 from .constants import MOCK_VACCINE_DATA, EMPTY_LOCATIONS_RESPONSE, NON_EMPTY_LOCATION_RESPONSE, \
@@ -19,6 +20,7 @@ class MyTurnCATest(TestCase):
     @patch('app.src.myTurnCA.MyTurnCA._get_vaccine_data', MagicMock(return_value=MOCK_VACCINE_DATA))
     def setUp(self):
         self.my_turn_ca = MyTurnCA()
+        self.today = datetime.now(tz=pytz.timezone('US/Pacific')).date()
 
     def test_sanity(self):
         """Sanity test to make sure _get_vaccine_data was properly mocked"""
@@ -49,7 +51,7 @@ class MyTurnCATest(TestCase):
         responses.add(method=responses.POST,
                       url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/availability',
                       json=EMPTY_LOCATION_AVAILABILITY_RESPONSE)
-        self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, date.today(), date.today()),
+        self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, self.today, self.today),
                          LocationAvailability(location=TEST_LOCATION, dates_available=[]))
 
     @responses.activate
@@ -58,7 +60,7 @@ class MyTurnCATest(TestCase):
         responses.add(method=responses.POST,
                       url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/availability',
                       json=UNAVAILABLE_LOCATION_AVAILABILITY_RESPONSE)
-        self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, date.today(), date.today()),
+        self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, self.today, self.today),
                          LocationAvailability(location=TEST_LOCATION, dates_available=[]))
 
     @responses.activate
@@ -67,7 +69,7 @@ class MyTurnCATest(TestCase):
         responses.add(method=responses.POST,
                       url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/availability',
                       json=MIXED_LOCATION_AVAILABILITY_RESPONSE)
-        self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, date.today(), date.today()),
+        self.assertEqual(self.my_turn_ca.get_availability(TEST_LOCATION, self.today, self.today),
                          LocationAvailability(location=TEST_LOCATION,
                                               dates_available=[datetime.strptime(x['date'], '%Y-%m-%d').date()
                                                                for x in MIXED_LOCATION_AVAILABILITY_RESPONSE['availability'] if x['available']]))
@@ -75,51 +77,48 @@ class MyTurnCATest(TestCase):
     @responses.activate
     def test_slots_given_no_availability(self):
         """Tests that no slots are returned given empty response"""
-        today = date.today()
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{self.today.strftime("%Y-%m-%d")}/slots',
                       json=EMPTY_AVAILABILITY_SLOTS_RESPONSE)
-        self.assertEqual(self.my_turn_ca.get_slots(TEST_LOCATION, today),
+        self.assertEqual(self.my_turn_ca.get_slots(TEST_LOCATION, self.today),
                          LocationAvailabilitySlots(location=TEST_LOCATION, slots=[]))
 
     @responses.activate
     def test_slots_given_old_slots(self):
         """Tests that no slots are returned given slots that already occurred"""
-        today = date.today()
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{self.today.strftime("%Y-%m-%d")}/slots',
                       json=OLD_AVAILABILITY_SLOTS_RESPONSE)
-        self.assertEqual(self.my_turn_ca.get_slots(TEST_LOCATION, today),
+        self.assertEqual(self.my_turn_ca.get_slots(TEST_LOCATION, self.today),
                          LocationAvailabilitySlots(location=TEST_LOCATION, slots=[]))
 
     @responses.activate
     def test_slots_given_mixed_slots(self):
         """Tests that upcoming slots are returned and old slots are filtered out"""
-        today = date.today()
         responses.add(method=responses.POST,
-                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{today.strftime("%Y-%m-%d")}/slots',
+                      url=f'{MY_TURN_URL}locations/{TEST_LOCATION.location_id}/date/{self.today.strftime("%Y-%m-%d")}/slots',
                       json=MIXED_AVAILABILITY_SLOTS_RESPONSE)
-        response = self.my_turn_ca.get_slots(TEST_LOCATION, today)
+        response = self.my_turn_ca.get_slots(TEST_LOCATION, self.today)
         self.assertEqual(response.location, TEST_LOCATION)
         self.assertEqual(len(response.slots), 1)
 
     @patch('app.src.myTurnCA.MyTurnCA.get_locations', MagicMock(return_value=[]))
     def test_appointments_given_no_locations(self):
         """Tests that no slots are returned when no locations are found"""
-        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, date.today(), date.today()), [])
+        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, self.today, self.today), [])
 
     @patch('app.src.myTurnCA.MyTurnCA.get_locations', MagicMock(return_value=[TEST_LOCATION]))
     def test_appointments_given_reversed_dates(self):
         """Tests that exception is thrown if the end_date comes before the start_date"""
         with self.assertRaises(ValueError):
-            self.my_turn_ca.get_appointments(1, 2, date.today() + timedelta(weeks=1), date.today())
+            self.my_turn_ca.get_appointments(1, 2, self.today + timedelta(weeks=1), self.today)
 
     @patch('app.src.myTurnCA.MyTurnCA.get_locations', MagicMock(return_value=[TEST_LOCATION]))
     @patch('app.src.myTurnCA.MyTurnCA.get_availability',
            MagicMock(return_value=LocationAvailability(location=TEST_LOCATION, dates_available=[])))
     def test_appointments_given_no_availability(self):
         """Tests that no slots are returned if no locations have any availability"""
-        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, date.today(), date.today()), [])
+        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, self.today, self.today), [])
 
     @patch('app.src.myTurnCA.MyTurnCA.get_locations', MagicMock(return_value=[TEST_LOCATION]))
     @patch('app.src.myTurnCA.MyTurnCA.get_availability',
@@ -129,7 +128,7 @@ class MyTurnCATest(TestCase):
     @patch('app.src.myTurnCA.MyTurnCA.get_slots', MagicMock(return_value=LocationAvailabilitySlots(location=TEST_LOCATION, slots=[])))
     def test_appointments_given_availability_and_no_slots(self):
         """Tests that no slots are returned when a location has days available but no open slots"""
-        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, date.today(), date.today()), [])
+        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, self.today, self.today), [])
 
     @patch('app.src.myTurnCA.MyTurnCA.get_locations', MagicMock(return_value=[TEST_LOCATION, TEST_LOCATION]))
     @patch('app.src.myTurnCA.MyTurnCA.get_availability')
@@ -144,4 +143,4 @@ class MyTurnCATest(TestCase):
                                                  for x in NEW_AVAILABILITY_SLOTS_RESPONSE['slotsWithAvailability']])
         get_availability.side_effect = [availability, availability]
         get_slots.side_effect = [slots, LocationAvailabilitySlots(location=TEST_LOCATION, slots=[])]
-        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, date.today(), date.today()), [slots])
+        self.assertEqual(self.my_turn_ca.get_appointments(1, 2, self.today, self.today), [slots])

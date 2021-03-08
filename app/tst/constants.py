@@ -1,6 +1,8 @@
 """Test constants module"""
 from datetime import datetime, timedelta
 
+import pytz
+
 from ..src.myTurnCA import Location
 
 MOCK_VACCINE_DATA = 'VACCINE_DATA'
@@ -38,7 +40,7 @@ OLD_AVAILABILITY_SLOTS_RESPONSE = {
     'slotsWithAvailability': [
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now() - timedelta(hours=5)).strftime('%H:%M:%S')
+            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) - timedelta(hours=5)).strftime('%H:%M:%S')
         }
     ]
 }
@@ -46,7 +48,7 @@ NEW_AVAILABILITY_SLOTS_RESPONSE = {
     'slotsWithAvailability': [
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now() + timedelta(hours=5)).strftime('%H:%M:%S')
+            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) + timedelta(hours=5)).strftime('%H:%M:%S')
         }
     ]
 }
@@ -54,11 +56,11 @@ MIXED_AVAILABILITY_SLOTS_RESPONSE = {
     'slotsWithAvailability': [
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now() - timedelta(minutes=5)).strftime('%H:%M:%S')
+            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) - timedelta(minutes=5)).strftime('%H:%M:%S')
         },
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now() + timedelta(minutes=10)).strftime('%H:%M:%S')
+            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) + timedelta(minutes=10)).strftime('%H:%M:%S')
         }
     ]
 }

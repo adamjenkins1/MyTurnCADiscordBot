@@ -3,11 +3,12 @@ import logging
 import multiprocessing
 import queue
 import time
-from datetime import date, timedelta
+from datetime import timedelta, datetime
 from typing import Callable
 
 import pgeocode
 import pymongo
+import pytz
 from discord.errors import NotFound, Forbidden
 from discord.ext import commands, tasks
 from pandas import isnull, DataFrame
@@ -77,7 +78,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
                                    result_queue: multiprocessing.Queue):
         """Function run by worker processes to notify users when available appointments are found"""
         while True:
-            start_date = date.today()
+            start_date = datetime.now(tz=pytz.timezone('US/Pacific')).date()
             end_date = start_date + timedelta(weeks=1)
             appointments = my_turn_ca.get_appointments(latitude=zip_code_query['latitude'],
                                                        longitude=zip_code_query['longitude'],
@@ -246,7 +247,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
         if not is_zip_code_valid(city):
             raise InvalidZipCode
 
-        start_date = date.today()
+        start_date = datetime.now(tz=pytz.timezone('US/Pacific')).date()
         end_date = start_date + timedelta(weeks=1)
         appointments = my_turn_ca.get_appointments(latitude=city['latitude'], longitude=city['longitude'],
                                                    start_date=start_date, end_date=end_date)
