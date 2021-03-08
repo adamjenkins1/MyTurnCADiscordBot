@@ -1,5 +1,6 @@
 ![GitHub](https://img.shields.io/github/license/adamjenkins1/MyTurnCADiscordBot) 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/adamjenkins1/MyTurnCADiscordBot/Docker%20Build%20and%20Push%20on%20push)
+[![Unit tests](https://img.shields.io/github/workflow/status/adamjenkins1/MyTurnCADiscordBot/Unit%20tests?label=unit%20tests)](https://github.com/adamjenkins1/MyTurnCADiscordBot/actions/workflows/unit-tests.yml)
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/adamjenkins1/MyTurnCADiscordBot/Docker%20Build%20and%20Push%20on%20push)](https://github.com/adamjenkins1/MyTurnCADiscordBot/actions/workflows/docker-build-and-push.yml)
 ![Requires.io](https://img.shields.io/requires/github/adamjenkins1/MyTurnCADiscordBot)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/adamjenkins1/MyTurnCADiscordBot?sort=semver)
 ![Discord Bot status](https://img.shields.io/badge/dynamic/json?logo=discord&label=MyTurnCABot&query=%24.members[%3F(%40.username%20%3D%3D%20%22MyTurnCABot%22)].status&url=https%3A%2F%2Fdiscord.com%2Fapi%2Fguilds%2F815762834013028353%2Fwidget.json)
