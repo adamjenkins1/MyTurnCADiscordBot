@@ -49,6 +49,11 @@ ELIGIBLE_REQUEST_BODY = {
         }
     ]
 }
+ELIGIBILITY_URL = 'eligibility'
+LOCATIONS_URL = 'locations/search'
+LOCATION_AVAILABILITY_URL = 'locations/{location_id}/availability'
+LOCATION_AVAILABILITY_SLOTS_URL = 'locations/{location_id}/date/{start_date}/slots'
+JSON_DECODE_ERROR_MSG = 'unable to deserialize response body, "{body}" must not be a JSON, returning empty response'
 
 # env var constants
 DISCORD_BOT_TOKEN = 'DISCORD_BOT_TOKEN'

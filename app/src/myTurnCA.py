@@ -8,9 +8,11 @@ from typing import List
 
 import pytz
 from requests.adapters import HTTPAdapter
+from requests.models import Response
 from requests_toolbelt.sessions import BaseUrlSession
 
-from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY, DEFAULT_RETRY_STRATEGY
+from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY, DEFAULT_RETRY_STRATEGY, ELIGIBILITY_URL, LOCATIONS_URL, \
+    LOCATION_AVAILABILITY_URL, LOCATION_AVAILABILITY_SLOTS_URL, JSON_DECODE_ERROR_MSG
 
 
 class Location:
@@ -66,10 +68,7 @@ class MyTurnCA:
 
     def _get_vaccine_data(self) -> str:
         """Retrieve initial vaccine data"""
-        self.logger.info(f'sending request to {MY_TURN_URL}eligibility with body - {json.dumps(ELIGIBLE_REQUEST_BODY)}')
-        response = self.session.post(url='eligibility', json=ELIGIBLE_REQUEST_BODY).json()
-        self.logger.info(f'got response from /eligibility - {json.dumps(response)}')
-
+        response = self._send_request(url=ELIGIBILITY_URL, body=ELIGIBLE_REQUEST_BODY).json()
         if response['eligible'] is False:
             raise RuntimeError('something is wrong, default /eligibility body returned \'eligible\' = False')
 
@@ -86,13 +85,14 @@ class MyTurnCA:
             'vaccineData': self.vaccine_data
         }
 
-        self.logger.info(f'sending request to {MY_TURN_URL}locations/search with body - {json.dumps(body)}')
-        response = self.session.post(url='locations/search', json=body).json()
-        self.logger.info(f'got response from /locations/search - {json.dumps(response)}')
-
-        return [Location(location_id=x['extId'], name=x['name'], address=x['displayAddress'], booking_type=x['type'],
-                         vaccine_data=x['vaccineData'], distance=x['distanceInMeters'])
-                for x in response['locations']]
+        response = self._send_request(url=LOCATIONS_URL, body=body)
+        try:
+            return [Location(location_id=x['extId'], name=x['name'], address=x['displayAddress'], booking_type=x['type'],
+                             vaccine_data=x['vaccineData'], distance=x['distanceInMeters'])
+                    for x in response.json()['locations']]
+        except json.JSONDecodeError:
+            self.logger.error(JSON_DECODE_ERROR_MSG.format(body=response.text))
+            return []
 
     def get_availability(self, location: Location, start_date: date, end_date: date) -> LocationAvailability:
         """Gets a given vaccination location's availability"""
@@ -103,13 +103,14 @@ class MyTurnCA:
             'doseNumber': 1
         }
 
-        self.logger.info(
-            f'sending request to {MY_TURN_URL}locations/{location.location_id}/availability with body - {json.dumps(body)}')
-        response = self.session.post(url=f'locations/{location.location_id}/availability', json=body).json()
-        self.logger.info(f'got response from /locations/{location.location_id}/availability - {json.dumps(response)}')
-        return LocationAvailability(location=location,
-                                    dates_available=[datetime.strptime(x['date'], '%Y-%m-%d').date()
-                                                     for x in response['availability'] if x['available'] is True])
+        response = self._send_request(url=LOCATION_AVAILABILITY_URL.format(location_id=location.location_id), body=body)
+        try:
+            return LocationAvailability(location=location,
+                                        dates_available=[datetime.strptime(x['date'], '%Y-%m-%d').date()
+                                                         for x in response.json()['availability'] if x['available'] is True])
+        except json.JSONDecodeError:
+            self.logger.error(JSON_DECODE_ERROR_MSG.format(body=response.text))
+            return LocationAvailability(location=location, dates_available=[])
 
     def get_slots(self, location: Location, start_date: date) -> LocationAvailabilitySlots:
         """Gets a given location's available appointments"""
@@ -117,17 +118,17 @@ class MyTurnCA:
             'vaccineData': location.vaccine_data
         }
 
-        self.logger.info(f'sending request to '
-                         f'{MY_TURN_URL}locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots '
-                         f'with body - {json.dumps(body)}')
-        response = self.session.post(url=f'locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")}/slots',
-                                     json=body).json()
-        self.logger.info(f'got response from /locations/{location.location_id}/date/{start_date.strftime("%Y-%m-%d")} - {json.dumps(response)}')
-
-        return LocationAvailabilitySlots(location=location,
-                                         slots=[self._combine_date_and_time(start_date, x['localStartTime'])
-                                                for x in response['slotsWithAvailability']
-                                                if self._combine_date_and_time(start_date, x['localStartTime']) > datetime.now(tz=pytz.timezone('US/Pacific'))])
+        response = self._send_request(url=LOCATION_AVAILABILITY_SLOTS_URL.format(location_id=location.location_id,
+                                                                                 start_date=start_date.strftime('%Y-%m-%d')),
+                                      body=body)
+        try:
+            return LocationAvailabilitySlots(location=location,
+                                             slots=[self._combine_date_and_time(start_date, x['localStartTime'])
+                                                    for x in response.json()['slotsWithAvailability']
+                                                    if self._combine_date_and_time(start_date, x['localStartTime']) > datetime.now(tz=pytz.timezone('US/Pacific'))])
+        except json.JSONDecodeError:
+            self.logger.error(JSON_DECODE_ERROR_MSG.format(body=response.text))
+            return LocationAvailabilitySlots(location=location, slots=[])
 
     def get_appointments(self, latitude: float, longitude: float, start_date: date, end_date: date) -> List[LocationAvailabilitySlots]:
         """Retrieves available appointments from all vaccination locations near the given coordinates"""
@@ -162,3 +163,10 @@ class MyTurnCA:
         """Private helper function to combine a date and timestamp"""
         return datetime.combine(start_date, datetime.strptime(timestamp, '%H:%M:%S').time(),
                                 tzinfo=pytz.timezone('US/Pacific'))
+
+    def _send_request(self, url: str, body: dict) -> Response:
+        """Private helper function to make HTTP POST requests"""
+        self.logger.info(f'sending request to {MY_TURN_URL}{url} with body - {body}')
+        response = self.session.post(url=url, json=body)
+        self.logger.info(f'got response from /{url} - {response.__dict__}')
+        return response

@@ -5,6 +5,7 @@ import pytz
 
 from ..src.myTurnCA import Location
 
+BAD_JSON_RESPONSE = 'this is not a json!'
 MOCK_VACCINE_DATA = 'VACCINE_DATA'
 EMPTY_LOCATIONS_RESPONSE = {'locations': []}
 LOCATION_DICT = {
