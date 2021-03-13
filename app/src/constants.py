@@ -7,7 +7,7 @@ MY_TURN_URL = 'https://api.myturn.ca.gov/public/'
 DEFAULT_RETRY_STRATEGY = Retry(
     total=REQUESTS_MAX_RETRIES,
     backoff_factor=0.2,
-    status_forcelist=[429, 500, 502, 503, 504],
+    status_forcelist=[403, 429, 500, 502, 503, 504],
     allowed_methods=frozenset(['GET', 'POST']))
 ELIGIBLE_REQUEST_BODY = {
     'eligibilityQuestionResponse': [
@@ -76,3 +76,4 @@ GET_APPOINTMENTS_BRIEF = 'Lists appointments at nearby vaccination locations'
 GET_APPOINTMENTS_DESCRIPTION = 'Lists how many appointments are available within the next week at vaccination ' \
                                'locations near the given zip code'
 NOTIFICATION_WAIT_PERIOD = 30
+WORKER_PROCESS_DELAY = 3

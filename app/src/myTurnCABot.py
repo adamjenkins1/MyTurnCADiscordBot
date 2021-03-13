@@ -15,7 +15,7 @@ from pandas import isnull, DataFrame
 
 from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
-    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, NOTIFICATION_WAIT_PERIOD
+    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, NOTIFICATION_WAIT_PERIOD, WORKER_PROCESS_DELAY
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
@@ -322,6 +322,8 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
                                                                    target=add_notification_generator,
                                                                    kwargs=kwargs)
             my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'pid': worker.pid}})
+            # let's not spawn all the worker processes at once and blow up myturn
+            time.sleep(WORKER_PROCESS_DELAY)
 
         start_tasks.start()
         notification_cursor.close()
