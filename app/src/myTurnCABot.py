@@ -94,11 +94,12 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
             for appointment in appointments:
                 message += f'  * {str(appointment.location)} - {len(appointment.slots)} appointment(s) available\n'
 
-            logger.info('found appointments, pushing onto queue')
-            result_queue.put(AppointmentNotification(channel_id=channel_id,
-                                                     message=message,
-                                                     zip_code=int(zip_code_query['postal_code']),
-                                                     user_id=user_id))
+            notification = AppointmentNotification(channel_id=channel_id,
+                                                   message=message,
+                                                   zip_code=int(zip_code_query['postal_code']),
+                                                   user_id=user_id)
+            logger.info(f'found appointments, pushing notification onto queue - {notification.__dict__}')
+            result_queue.put(notification)
             return
 
     @bot.command(brief=CANCEL_NOTIFICATION_BRIEF, description=CANCEL_NOTIFICATION_DESCRIPTION)
@@ -216,11 +217,9 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
             logger.error(f'channel {notification.channel_id} was not found, maybe it was deleted...?')
         except Forbidden:
             logger.error(f'we don\'t have sufficient privileges to fetch channel {notification.channel_id}')
-
-    @tasks.loop(seconds=10)
-    async def start_tasks():
-        """Task to start/restart other tasks should they fail"""
-        [task.start() for task in [poll_notifications, check_workers] if not task.is_running()]
+        except Exception as e:
+            logger.error('got unrecognized exception, silently catching it to avoid breaking loop')
+            logger.error(e)
 
     @bot.command(brief=GET_LOCATIONS_DESCRIPTION, description=GET_LOCATIONS_DESCRIPTION)
     async def get_locations(ctx: commands.Context, zip_code: int):
@@ -299,7 +298,7 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
     async def on_ready():
         """Bot event to start background task and create worker processes to handle any outstanding notifications"""
         # stop running tasks to make sure we aren't crossing streams
-        [task.stop() for task in [start_tasks, poll_notifications, check_workers] if task.is_running()]
+        [task.stop() for task in [poll_notifications, check_workers] if task.is_running()]
 
         # if we disconnected and reconnected, kill old workers in case they got stuck
         for process in bot.worker_processes.values():
@@ -325,7 +324,8 @@ def run(token: str, mongodb_user: str, mongodb_password: str, mongodb_host: str,
             # let's not spawn all the worker processes at once and blow up myturn
             time.sleep(WORKER_PROCESS_DELAY)
 
-        start_tasks.start()
         notification_cursor.close()
+        # restart stopped tasks
+        [task.start() for task in [poll_notifications, check_workers]]
 
     bot.run(token)

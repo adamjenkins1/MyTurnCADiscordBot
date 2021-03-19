@@ -10,7 +10,7 @@ from .constants import MOCK_VACCINE_DATA, EMPTY_LOCATIONS_RESPONSE, NON_EMPTY_LO
     EMPTY_LOCATION_AVAILABILITY_RESPONSE, UNAVAILABLE_LOCATION_AVAILABILITY_RESPONSE, \
     MIXED_LOCATION_AVAILABILITY_RESPONSE, TEST_LOCATION, EMPTY_AVAILABILITY_SLOTS_RESPONSE, \
     OLD_AVAILABILITY_SLOTS_RESPONSE, MIXED_AVAILABILITY_SLOTS_RESPONSE, AVAILABLE_LOCATION_AVAILABILITY_RESPONSE, \
-    NEW_AVAILABILITY_SLOTS_RESPONSE, BAD_JSON_RESPONSE
+    NEW_AVAILABILITY_SLOTS_RESPONSE, BAD_JSON_RESPONSE, CURRENT_TIME
 from ..src.constants import MY_TURN_URL, LOCATIONS_URL, LOCATION_AVAILABILITY_URL, LOCATION_AVAILABILITY_SLOTS_URL
 from ..src.myTurnCA import MyTurnCA, Location, LocationAvailability, LocationAvailabilitySlots
 
@@ -23,6 +23,14 @@ class MyTurnCATest(TestCase):
         self.today = datetime.now(tz=pytz.timezone('US/Pacific')).date()
         self.slots_url = LOCATION_AVAILABILITY_SLOTS_URL.format(location_id=TEST_LOCATION.location_id,
                                                                 start_date=self.today.strftime('%Y-%m-%d'))
+
+    def set_up_mock_datetime(self, mock: MagicMock):
+        """Helper method to setup mock datetime behavior"""
+        mock.now = MagicMock(return_value=datetime.combine(self.today,
+                                                           datetime.strptime(CURRENT_TIME, '%H:%M:%S').time(),
+                                                           tzinfo=pytz.timezone('US/Pacific')))
+        mock.combine = datetime.combine
+        mock.strptime = datetime.strptime
 
     def test_sanity(self):
         """Sanity test to make sure _get_vaccine_data was properly mocked"""
@@ -108,8 +116,10 @@ class MyTurnCATest(TestCase):
                          LocationAvailabilitySlots(location=TEST_LOCATION, slots=[]))
 
     @responses.activate
-    def test_slots_given_old_slots(self):
+    @patch('app.src.myTurnCA.datetime')
+    def test_slots_given_old_slots(self, mock_datetime):
         """Tests that no slots are returned given slots that already occurred"""
+        self.set_up_mock_datetime(mock_datetime)
         responses.add(method=responses.POST,
                       url=f'{MY_TURN_URL}{self.slots_url}',
                       json=OLD_AVAILABILITY_SLOTS_RESPONSE)
@@ -117,8 +127,10 @@ class MyTurnCATest(TestCase):
                          LocationAvailabilitySlots(location=TEST_LOCATION, slots=[]))
 
     @responses.activate
-    def test_slots_given_mixed_slots(self):
+    @patch('app.src.myTurnCA.datetime')
+    def test_slots_given_mixed_slots(self, mock_datetime):
         """Tests that upcoming slots are returned and old slots are filtered out"""
+        self.set_up_mock_datetime(mock_datetime)
         responses.add(method=responses.POST,
                       url=f'{MY_TURN_URL}{self.slots_url}',
                       json=MIXED_AVAILABILITY_SLOTS_RESPONSE)

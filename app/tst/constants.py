@@ -1,8 +1,4 @@
 """Test constants module"""
-from datetime import datetime, timedelta
-
-import pytz
-
 from ..src.myTurnCA import Location
 
 BAD_JSON_RESPONSE = 'this is not a json!'
@@ -37,11 +33,14 @@ AVAILABLE_LOCATION_AVAILABILITY_RESPONSE = {
     ]
 }
 EMPTY_AVAILABILITY_SLOTS_RESPONSE = {'slotsWithAvailability': []}
+NEW_SLOT_TIME = '10:00:00'
+OLD_SLOT_TIME = '8:00:00'
+CURRENT_TIME = '9:00:00'
 OLD_AVAILABILITY_SLOTS_RESPONSE = {
     'slotsWithAvailability': [
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) - timedelta(hours=5)).strftime('%H:%M:%S')
+            'localStartTime': OLD_SLOT_TIME
         }
     ]
 }
@@ -49,7 +48,7 @@ NEW_AVAILABILITY_SLOTS_RESPONSE = {
     'slotsWithAvailability': [
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) + timedelta(hours=5)).strftime('%H:%M:%S')
+            'localStartTime': NEW_SLOT_TIME
         }
     ]
 }
@@ -57,11 +56,11 @@ MIXED_AVAILABILITY_SLOTS_RESPONSE = {
     'slotsWithAvailability': [
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) - timedelta(minutes=5)).strftime('%H:%M:%S')
+            'localStartTime': OLD_SLOT_TIME
         },
         {
             'durationSeconds': 300,
-            'localStartTime': (datetime.now(tz=pytz.timezone('US/Pacific')) + timedelta(minutes=10)).strftime('%H:%M:%S')
+            'localStartTime': NEW_SLOT_TIME
         }
     ]
 }
