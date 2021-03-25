@@ -12,7 +12,7 @@ from requests.models import Response
 from requests_toolbelt.sessions import BaseUrlSession
 
 from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY, DEFAULT_RETRY_STRATEGY, ELIGIBILITY_URL, LOCATIONS_URL, \
-    LOCATION_AVAILABILITY_URL, LOCATION_AVAILABILITY_SLOTS_URL, JSON_DECODE_ERROR_MSG, FIREFOX_USER_AGENT
+    LOCATION_AVAILABILITY_URL, LOCATION_AVAILABILITY_SLOTS_URL, JSON_DECODE_ERROR_MSG, REQUEST_HEADERS
 
 
 class Location:
@@ -64,7 +64,7 @@ class MyTurnCA:
         self.logger = logging.getLogger(__name__)
         self.session = BaseUrlSession(base_url=MY_TURN_URL)
         self.session.mount('https://', HTTPAdapter(max_retries=DEFAULT_RETRY_STRATEGY))
-        self.session.headers.update({'user-agent': FIREFOX_USER_AGENT})
+        self.session.headers.update(REQUEST_HEADERS)
         self.vaccine_data = self._get_vaccine_data()
 
     def _get_vaccine_data(self) -> str:
