@@ -90,11 +90,11 @@ def run(token: str, namespace: str, mongodb_user: str, mongodb_password: str, mo
                                 args=[
                                     '--worker',
                                     '--channel_id',
-                                    ctx.channel.id,
+                                    str(ctx.channel.id),
                                     '--user_id',
-                                    ctx.author.id,
+                                    str(ctx.author.id),
                                     '--zip_code',
-                                    zip_code
+                                    str(zip_code)
                                 ],
                                 env=[
                                     client.V1EnvVar(
