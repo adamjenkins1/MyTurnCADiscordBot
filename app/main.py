@@ -52,7 +52,7 @@ if __name__ == '__main__':
                                                      zip_code=args.zip_code)
         sys.exit(0)
 
-    for var in WORKER_ENV_VARS:
+    for var in BOT_ENV_VARS:
         try:
             BOT_ENV_VARS[var] = os.environ[var]
         except KeyError:
