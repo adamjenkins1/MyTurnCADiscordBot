@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Main driver for MyTurnBot"""
+import argparse
 import logging
 import os
 import sys
-import argparse
 
-from app.src.notificationGenerator import NotificationGenerator
 from src import myTurnCABot
 from src.constants import DISCORD_BOT_TOKEN, MONGO_USER, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, NAMESPACE
+from src.notificationGenerator import NotificationGenerator
 
 BOT_ENV_VARS = {
     DISCORD_BOT_TOKEN: '',
