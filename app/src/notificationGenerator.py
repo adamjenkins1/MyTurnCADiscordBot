@@ -6,8 +6,8 @@ import pgeocode
 import pymongo
 import pytz
 
-from app.src.constants import NOTIFICATION_WAIT_PERIOD
-from app.src.myTurnCA import MyTurnCA
+from .constants import NOTIFICATION_WAIT_PERIOD
+from .myTurnCA import MyTurnCA
 
 
 class NotificationGenerator:
