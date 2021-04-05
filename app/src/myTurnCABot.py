@@ -29,7 +29,9 @@ class MyTurnCABot(commands.Bot):
 
     async def close(self):
         """Cleans up notification jobs to avoid leaving running jobs in cluster"""
-        [self.k8s_batch.delete_namespaced_job(namespace=self.namespace, name=job.metadata.labels['job-name'])
+        [self.k8s_batch.delete_namespaced_job(namespace=self.namespace,
+                                              name=job.metadata.labels['job-name'],
+                                              body=client.V1DeleteOptions(propagation_policy='Background'))
          for job in [job for job in self.k8s_batch.list_namespaced_job(namespace=self.namespace).items
                      if job.metadata.labels['job-name'].startswith(JOB_NAME_PREFIX)]]
 
@@ -109,7 +111,9 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
             return
 
         try:
-            bot.k8s_batch.delete_namespaced_job(name=notification['job_name'], namespace=namespace)
+            bot.k8s_batch.delete_namespaced_job(name=notification['job_name'],
+                                                namespace=namespace,
+                                                body=client.V1DeleteOptions(propagation_policy='Background'))
         except client.exceptions.ApiException as e:
             logger.info(f'caught exception while attempting to delete job {notification["job_name"]}, '
                         f'maybe it doesn\'t exist...?')
