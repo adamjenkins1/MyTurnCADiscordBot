@@ -67,6 +67,8 @@ MONGO_USER = 'MONGO_USER'
 MONGO_PASSWORD = 'MONGO_PASSWORD'
 MONGO_HOST = 'MONGO_HOST'
 MONGO_PORT = 'MONGO_PORT'
+NAMESPACE = 'NAMESPACE'
+JOB_IMAGE = 'JOB_IMAGE'
 
 # MyTurnCABot constants
 COMMAND_PREFIX = '!'
@@ -81,4 +83,9 @@ GET_APPOINTMENTS_BRIEF = 'Lists appointments at nearby vaccination locations'
 GET_APPOINTMENTS_DESCRIPTION = 'Lists how many appointments are available within the next week at vaccination ' \
                                'locations near the given zip code'
 NOTIFICATION_WAIT_PERIOD = 30
-WORKER_PROCESS_DELAY = 3
+JOB_MAX_RETRIES = 6
+JOB_TTL_SECONDS_AFTER_FINISHED = 0
+JOB_NAME_PREFIX = 'myturncabot-notification-job-'
+JOB_RESTART_POLICY = 'OnFailure'
+JOB_DELETION_PROPAGATION_POLICY = 'Foreground'
+JOB_RESOURCE_REQUESTS = {'memory': '128Mi', 'cpu': '5m'}
