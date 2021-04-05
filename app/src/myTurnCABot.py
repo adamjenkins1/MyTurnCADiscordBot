@@ -14,7 +14,7 @@ from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIE
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
     GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, MONGO_USER, \
     MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, JOB_MAX_RETRIES, JOB_TTL_SECONDS_AFTER_FINISHED, JOB_NAME_PREFIX, \
-    JOB_RESTART_POLICY, JOB_DELETION_PROPAGATION_POLICY, JOB_RESOURCE_LIMITS, JOB_RESOURCE_REQUESTS
+    JOB_RESTART_POLICY, JOB_DELETION_PROPAGATION_POLICY, JOB_RESOURCE_REQUESTS
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
@@ -75,10 +75,7 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                             containers=[client.V1Container(
                                 name='worker',
                                 image=job_image,
-                                resources=client.V1ResourceRequirements(
-                                    requests=JOB_RESOURCE_REQUESTS,
-                                    limits=JOB_RESOURCE_LIMITS
-                                ),
+                                resources=client.V1ResourceRequirements(requests=JOB_RESOURCE_REQUESTS),
                                 args=[
                                     '--worker',
                                     '--channel_id',
