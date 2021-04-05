@@ -1,9 +1,7 @@
 """Discord bot to help you find a COVID-19 vaccination appointment in CA"""
 import logging
-import multiprocessing
 import time
 from datetime import timedelta, datetime
-from typing import Callable
 
 import pgeocode
 import pymongo
@@ -27,7 +25,8 @@ class MyTurnCABot(commands.Bot):
         super().__init__(command_prefix, **options)
 
 
-def run(token: str, namespace: str, mongodb_user: str, mongodb_password: str, mongodb_host: str, mongodb_port: str):
+def run(token: str, namespace: str, job_image: str, mongodb_user: str,
+        mongodb_password: str, mongodb_host: str, mongodb_port: str):
     """Main bot driver method"""
     bot = MyTurnCABot(command_prefix=COMMAND_PREFIX, description=BOT_DESCRIPTION)
     config.load_incluster_config()
@@ -86,7 +85,7 @@ def run(token: str, namespace: str, mongodb_user: str, mongodb_password: str, mo
                             restart_policy='OnFailure',
                             containers=[client.V1Container(
                                 name='worker',
-                                image='adamjenkins1701/myturncadiscordbot:v2.0.0-alpha',
+                                image=job_image,
                                 args=[
                                     '--worker',
                                     '--channel_id',

@@ -6,7 +6,7 @@ import os
 import sys
 
 from src import myTurnCABot
-from src.constants import DISCORD_BOT_TOKEN, MONGO_USER, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, NAMESPACE
+from src.constants import DISCORD_BOT_TOKEN, MONGO_USER, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, NAMESPACE, JOB_IMAGE
 from src.notificationGenerator import NotificationGenerator
 
 BOT_ENV_VARS = {
@@ -15,7 +15,8 @@ BOT_ENV_VARS = {
     MONGO_PASSWORD: '',
     MONGO_HOST: '',
     MONGO_PORT: '',
-    NAMESPACE: ''
+    NAMESPACE: '',
+    JOB_IMAGE: ''
 }
 
 WORKER_ENV_VARS = {
@@ -61,6 +62,7 @@ if __name__ == '__main__':
 
     myTurnCABot.run(token=BOT_ENV_VARS[DISCORD_BOT_TOKEN],
                     namespace=BOT_ENV_VARS[NAMESPACE],
+                    job_image=BOT_ENV_VARS[JOB_IMAGE],
                     mongodb_user=BOT_ENV_VARS[MONGO_USER],
                     mongodb_password=BOT_ENV_VARS[MONGO_PASSWORD],
                     mongodb_host=BOT_ENV_VARS[MONGO_HOST],
