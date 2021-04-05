@@ -13,8 +13,8 @@ from kubernetes import client, config
 
 from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
-    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, NOTIFICATION_WAIT_PERIOD, WORKER_PROCESS_DELAY, MONGO_USER, \
-    MONGO_PASSWORD, MONGO_HOST, MONGO_PORT
+    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, NOTIFICATION_WAIT_PERIOD, JOB_DELAY, MONGO_USER, \
+    MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, JOB_MAX_RETRIES, JOB_TTL_SECONDS_AFTER_FINISHED
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
@@ -46,6 +46,50 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
             zip_code_result['state_code'] != 'CA'
         ])
 
+    def create_notification_job(user_id: int, channel_id: int, zip_code: int) -> client.V1Job:
+        return k8s_batch.create_namespaced_job(
+            namespace=namespace,
+            body=client.V1Job(
+                api_version='batch/v1',
+                kind='Job',
+                metadata=client.V1ObjectMeta(generate_name='notification-job-'),
+                spec=client.V1JobSpec(
+                    ttl_seconds_after_finished=JOB_TTL_SECONDS_AFTER_FINISHED,
+                    backoff_limit=JOB_MAX_RETRIES,
+                    template=client.V1PodTemplateSpec(
+                        spec=client.V1PodSpec(
+                            restart_policy='OnFailure',
+                            containers=[client.V1Container(
+                                name='worker',
+                                image=job_image,
+                                args=[
+                                    '--worker',
+                                    '--channel_id',
+                                    str(channel_id),
+                                    '--user_id',
+                                    str(user_id),
+                                    '--zip_code',
+                                    str(zip_code)
+                                ],
+                                env=[
+                                    client.V1EnvVar(
+                                        name=key,
+                                        value=value
+                                    )
+                                    for key, value in {
+                                        MONGO_USER: mongodb_user,
+                                        MONGO_PASSWORD: mongodb_password,
+                                        MONGO_HOST: mongodb_host,
+                                        MONGO_PORT: mongodb_port
+                                    }.items()
+                                ]
+                            )]
+                        )
+                    )
+                )
+            )
+        )
+
     @bot.command(brief=CANCEL_NOTIFICATION_BRIEF, description=CANCEL_NOTIFICATION_DESCRIPTION)
     async def cancel_notification(ctx: commands.Context, zip_code: int):
         """Bot command to cancel an outstanding notification"""
@@ -72,48 +116,7 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
             return
 
         await ctx.reply(f'OK, I\'ll let you know when I find appointments in your area')
-        job = k8s_batch.create_namespaced_job(
-            namespace=namespace,
-            body=client.V1Job(
-                api_version='batch/v1',
-                kind='Job',
-                metadata=client.V1ObjectMeta(generate_name='notification-job-'),
-                spec=client.V1JobSpec(
-                    ttl_seconds_after_finished=0,
-                    template=client.V1PodTemplateSpec(
-                        spec=client.V1PodSpec(
-                            restart_policy='OnFailure',
-                            containers=[client.V1Container(
-                                name='worker',
-                                image=job_image,
-                                args=[
-                                    '--worker',
-                                    '--channel_id',
-                                    str(ctx.channel.id),
-                                    '--user_id',
-                                    str(ctx.author.id),
-                                    '--zip_code',
-                                    str(zip_code)
-                                ],
-                                env=[
-                                    client.V1EnvVar(
-                                        name=key,
-                                        value=value
-                                    )
-                                    for key, value in {
-                                        MONGO_USER: mongodb_user,
-                                        MONGO_PASSWORD: mongodb_password,
-                                        MONGO_HOST: mongodb_host,
-                                        MONGO_PORT: mongodb_port
-                                    }.items()
-                                ]
-                            )]
-                        )
-                    )
-                )
-            )
-        )
-
+        job = create_notification_job(user_id=ctx.author.id, channel_id=ctx.channel.id, zip_code=zip_code)
         my_turn_ca_db.notifications.insert_one({
             'user_id': ctx.author.id,
             'zip_code': zip_code,
@@ -229,6 +232,20 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
     @bot.event
     async def on_ready():
         """Bot event to start background task and create worker processes to handle any outstanding notifications"""
+        notification_cursor = my_turn_ca_db.notifications.find({'message': {'$exists': False}})
+        for notification in notification_cursor:
+            jobs = k8s_batch.list_namespaced_job(namespace=namespace,
+                                                 label_selector=f'job-name={notification["job_name"]}')
+            # if job doesn't exist or the job exists but has permanently failed, create another
+            if not jobs.items or jobs.items[0].status.failed == JOB_MAX_RETRIES + 1:
+                job = create_notification_job(user_id=notification['user_id'],
+                                              channel_id=notification['channel_id'],
+                                              zip_code=notification['zip_code'])
+                my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'job_name': job.metadata.name}})
+                # let's not spawn all the jobs at once and blow up myturn
+                time.sleep(JOB_DELAY)
+
+        notification_cursor.close()
         if not poll_notifications.is_running():
             poll_notifications.start()
 
