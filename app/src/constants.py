@@ -87,3 +87,6 @@ JOB_MAX_RETRIES = 6
 JOB_TTL_SECONDS_AFTER_FINISHED = 0
 JOB_NAME_PREFIX = 'myturncabot-notification-job-'
 JOB_RESTART_POLICY = 'OnFailure'
+JOB_DELETION_PROPAGATION_POLICY = 'Foreground'
+JOB_RESOURCE_REQUESTS = {'memory': '128Mi', 'cpu': '5m'}
+JOB_RESOURCE_LIMITS = {'memory': '256Mi', 'cpu': '10m'}

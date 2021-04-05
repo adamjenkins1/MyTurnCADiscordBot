@@ -14,7 +14,7 @@ from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIE
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
     GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, MONGO_USER, \
     MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, JOB_MAX_RETRIES, JOB_TTL_SECONDS_AFTER_FINISHED, JOB_NAME_PREFIX, \
-    JOB_RESTART_POLICY
+    JOB_RESTART_POLICY, JOB_DELETION_PROPAGATION_POLICY, JOB_RESOURCE_LIMITS, JOB_RESOURCE_REQUESTS
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
@@ -31,7 +31,8 @@ class MyTurnCABot(commands.Bot):
         """Cleans up notification jobs to avoid leaving running jobs in cluster"""
         [self.k8s_batch.delete_namespaced_job(namespace=self.namespace,
                                               name=job.metadata.labels['job-name'],
-                                              body=client.V1DeleteOptions(propagation_policy='Background'))
+                                              body=client.V1DeleteOptions(
+                                                  propagation_policy=JOB_DELETION_PROPAGATION_POLICY))
          for job in [job for job in self.k8s_batch.list_namespaced_job(namespace=self.namespace).items
                      if job.metadata.labels['job-name'].startswith(JOB_NAME_PREFIX)]]
 
@@ -74,6 +75,10 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                             containers=[client.V1Container(
                                 name='worker',
                                 image=job_image,
+                                resources=client.V1ResourceRequirements(
+                                    requests=JOB_RESOURCE_REQUESTS,
+                                    limits=JOB_RESOURCE_LIMITS
+                                ),
                                 args=[
                                     '--worker',
                                     '--channel_id',
@@ -113,7 +118,8 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
         try:
             bot.k8s_batch.delete_namespaced_job(name=notification['job_name'],
                                                 namespace=namespace,
-                                                body=client.V1DeleteOptions(propagation_policy='Background'))
+                                                body=client.V1DeleteOptions(
+                                                    propagation_policy=JOB_DELETION_PROPAGATION_POLICY))
         except client.exceptions.ApiException as e:
             logger.info(f'caught exception while attempting to delete job {notification["job_name"]}, '
                         f'maybe it doesn\'t exist...?')
