@@ -21,6 +21,8 @@ class NotificationGenerator:
         """Function run by worker processes to notify users when available appointments are found"""
         zip_code_query = self.nomi.query_postal_code(zip_code)
         while True:
+            # temporarily force failure
+            raise Exception('this is a failure!')
             start_date = datetime.now(tz=pytz.timezone('US/Pacific')).date()
             end_date = start_date + timedelta(weeks=1)
             appointments = self.my_turn_ca.get_appointments(latitude=zip_code_query['latitude'],

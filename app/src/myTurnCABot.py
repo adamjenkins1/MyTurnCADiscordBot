@@ -237,7 +237,7 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
             jobs = k8s_batch.list_namespaced_job(namespace=namespace,
                                                  label_selector=f'job-name={notification["job_name"]}')
             # if job doesn't exist or the job exists but has permanently failed, create another
-            if not jobs.items or jobs.items[0].status.failed == JOB_MAX_RETRIES + 1:
+            if not jobs.items or jobs.items[0].status.failed:
                 job = create_notification_job(user_id=notification['user_id'],
                                               channel_id=notification['channel_id'],
                                               zip_code=notification['zip_code'])
