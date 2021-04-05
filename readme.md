@@ -1,7 +1,7 @@
 ![GitHub](https://img.shields.io/github/license/adamjenkins1/MyTurnCADiscordBot) 
 [![Unit tests](https://img.shields.io/github/workflow/status/adamjenkins1/MyTurnCADiscordBot/Unit%20tests?label=unit%20tests)](https://github.com/adamjenkins1/MyTurnCADiscordBot/actions/workflows/unit-tests.yml)
 [![GitHub Workflow Status](https://img.shields.io/github/workflow/status/adamjenkins1/MyTurnCADiscordBot/Docker%20Build%20and%20Push%20on%20push)](https://github.com/adamjenkins1/MyTurnCADiscordBot/actions/workflows/docker-build-and-push.yml)
-![Requires.io](https://img.shields.io/requires/github/adamjenkins1/MyTurnCADiscordBot)
+[![Requires.io](https://img.shields.io/requires/github/adamjenkins1/MyTurnCADiscordBot/main)](https://requires.io/github/adamjenkins1/MyTurnCADiscordBot/requirements/?branch=main)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/adamjenkins1/MyTurnCADiscordBot?sort=semver)
 ![Discord Bot status](https://img.shields.io/badge/dynamic/json?logo=discord&label=MyTurnCABot&query=%24.members[%3F(%40.username%20%3D%3D%20%22MyTurnCABot%22)].status&url=https%3A%2F%2Fdiscord.com%2Fapi%2Fguilds%2F815762834013028353%2Fwidget.json)
 
@@ -20,7 +20,9 @@
 
 #### Current limitations
   * MyTurnCABot is not yet public on Discord, as this project is in the early stages of development. The intention is to allow anyone to add the bot to their Discord server once the project is more mature. Until then, if you're interested in using it, message ad4m#9596 on Discord.
-  * When a user asks to be notified when appointments become available, the bot creates a background process that will call My Turn every 30 seconds. This means that the number of concurrent notification requests that the bot can handle is limited by the host the bot is running on. This will be addressed in the future by transitioning to a distributed design where notification requests can be processed by multiple hosts rather than just one.  
+  * When a user asks to be notified when appointments become available, the bot creates a kubernetes job on the cluster it's hosted on, which is 
+    currently a 3 node bare metal kubernetes cluster. Given that resource requests have been set in the job spec, the number of concurrent
+    notification jobs the bot can create is limited by the available cluster resources.
 
 #### Usage
 ```
