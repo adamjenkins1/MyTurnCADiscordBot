@@ -1,6 +1,5 @@
 """Discord bot to help you find a COVID-19 vaccination appointment in CA"""
 import logging
-import time
 from datetime import timedelta, datetime
 
 import pgeocode
@@ -8,29 +7,39 @@ import pymongo
 import pytz
 from discord.errors import NotFound, Forbidden
 from discord.ext import commands, tasks
-from pandas import isnull, DataFrame
 from kubernetes import client, config
+from pandas import isnull, DataFrame
 
 from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIEF, CANCEL_NOTIFICATION_DESCRIPTION, \
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
-    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, NOTIFICATION_WAIT_PERIOD, JOB_DELAY, MONGO_USER, \
-    MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, JOB_MAX_RETRIES, JOB_TTL_SECONDS_AFTER_FINISHED
+    GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, MONGO_USER, \
+    MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, JOB_MAX_RETRIES, JOB_TTL_SECONDS_AFTER_FINISHED, JOB_NAME_PREFIX, \
+    JOB_RESTART_POLICY
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
 
 class MyTurnCABot(commands.Bot):
     """Main bot class"""
-    def __init__(self, command_prefix, **options):
+    def __init__(self, command_prefix, namespace, **options):
+        config.load_incluster_config()
+        self.k8s_batch = client.BatchV1Api()
+        self.namespace = namespace
         super().__init__(command_prefix, **options)
+
+    async def close(self):
+        """Cleans up notification jobs to avoid leaving running jobs in cluster"""
+        [self.k8s_batch.delete_namespaced_job(namespace=self.namespace, name=job.metadata.labels['job-name'])
+         for job in [job for job in self.k8s_batch.list_namespaced_job(namespace=self.namespace).items
+                     if job.metadata.labels['job-name'].startswith(JOB_NAME_PREFIX)]]
+
+        await super().close()
 
 
 def run(token: str, namespace: str, job_image: str, mongodb_user: str,
         mongodb_password: str, mongodb_host: str, mongodb_port: str):
     """Main bot driver method"""
-    bot = MyTurnCABot(command_prefix=COMMAND_PREFIX, description=BOT_DESCRIPTION)
-    config.load_incluster_config()
-    k8s_batch = client.BatchV1Api()
+    bot = MyTurnCABot(command_prefix=COMMAND_PREFIX, namespace=namespace, description=BOT_DESCRIPTION)
     logger = logging.getLogger(__name__)
     my_turn_ca = MyTurnCA()
     nomi = pgeocode.Nominatim('us')
@@ -47,18 +56,19 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
         ])
 
     def create_notification_job(user_id: int, channel_id: int, zip_code: int) -> client.V1Job:
-        return k8s_batch.create_namespaced_job(
+        """Creates job to fulfill requested notification"""
+        return bot.k8s_batch.create_namespaced_job(
             namespace=namespace,
             body=client.V1Job(
                 api_version='batch/v1',
                 kind='Job',
-                metadata=client.V1ObjectMeta(generate_name='notification-job-'),
+                metadata=client.V1ObjectMeta(generate_name=JOB_NAME_PREFIX),
                 spec=client.V1JobSpec(
                     ttl_seconds_after_finished=JOB_TTL_SECONDS_AFTER_FINISHED,
                     backoff_limit=JOB_MAX_RETRIES,
                     template=client.V1PodTemplateSpec(
                         spec=client.V1PodSpec(
-                            restart_policy='OnFailure',
+                            restart_policy=JOB_RESTART_POLICY,
                             containers=[client.V1Container(
                                 name='worker',
                                 image=job_image,
@@ -98,7 +108,13 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
             await ctx.reply(f'You don\'t have any outstanding notification requests for zip code {zip_code}')
             return
 
-        # TODO delete k8s job
+        try:
+            bot.k8s_batch.delete_namespaced_job(name=notification['job_name'], namespace=namespace)
+        except client.exceptions.ApiException as e:
+            logger.info(f'caught exception while attempting to delete job {notification["job_name"]}, '
+                        f'maybe it doesn\'t exist...?')
+            logger.error(e)
+
         my_turn_ca_db.notifications.delete_one(notification)
         await ctx.reply(f'Your notification request for zip code {zip_code} has been canceled, '
                         f'see `!help notify` to request another')
@@ -127,7 +143,8 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
     @bot.command(brief=GET_NOTIFICATIONS_DESCRIPTION, description=GET_NOTIFICATIONS_DESCRIPTION)
     async def get_notifications(ctx: commands.Context):
         """Bot command to retrieve a user's outstanding notifications"""
-        notifications = list(my_turn_ca_db.notifications.find({'user_id': ctx.author.id}))
+        notifications = list(my_turn_ca_db.notifications.find(filter={'user_id': ctx.author.id},
+                                                              projection={'zip_code': 1, '_id': 0}))
         if not notifications:
             await ctx.reply('You don\'t have any outstanding notification requests')
             return
@@ -137,21 +154,39 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
 
     @tasks.loop(seconds=5)
     async def poll_notifications():
-        """Background task to check if worker processes have populated the notification queue"""
-        notification = None
+        """Background task to check if notification jobs have completed successfully and notify user"""
         try:
-            notification = my_turn_ca_db.notifications.find_one({'message': {'$exists': True}})
-            if notification is None:
-                return
+            for notification in my_turn_ca_db.notifications.find({'message': {'$exists': True}}):
+                try:
+                    logger.info(f'found populated notification in database, sending message to channel - {notification}')
+                    channel = await bot.fetch_channel(notification['channel_id'])
+                    await channel.send(notification['message'])
+                    my_turn_ca_db.notifications.delete_one({'_id': notification['_id']})
+                except NotFound:
+                    logger.error(f'channel {notification["channel_id"]} was not found, maybe it was deleted...?')
+                except Forbidden:
+                    logger.error(f'we don\'t have sufficient privileges to fetch channel {notification["channel_id"]}')
+        except Exception as e:
+            logger.error('got unrecognized exception, silently catching it to avoid breaking loop')
+            logger.error(e)
 
-            logger.info(f'found populated notification in database, sending message to channel - {notification}')
-            channel = await bot.fetch_channel(notification['channel_id'])
-            await channel.send(notification['message'])
-            my_turn_ca_db.notifications.delete_one({'_id': notification['_id']})
-        except NotFound:
-            logger.error(f'channel {notification["channel_id"]} was not found, maybe it was deleted...?')
-        except Forbidden:
-            logger.error(f'we don\'t have sufficient privileges to fetch channel {notification["channel_id"]}')
+    @tasks.loop(seconds=5)
+    async def check_jobs():
+        """Background task to create notification jobs if there isn't currently a job handling a user's
+        notification or the job failed"""
+        try:
+            for notification in my_turn_ca_db.notifications.find({'message': {'$exists': False}}):
+                jobs = bot.k8s_batch.list_namespaced_job(namespace=namespace,
+                                                         label_selector=f'job-name={notification["job_name"]}')
+                # if job doesn't exist or the job exists but has permanently failed, create another
+                if not jobs.items or jobs.items[0].status.failed:
+                    job = create_notification_job(user_id=notification['user_id'],
+                                                  channel_id=notification['channel_id'],
+                                                  zip_code=notification['zip_code'])
+                    my_turn_ca_db.notifications.update_one({'_id': notification['_id']},
+                                                           {'$set': {'job_name': job.metadata.name}})
+                    # let's only create one job per loop to avoid spawning all the jobs at once and blowing up myturn
+                    return
         except Exception as e:
             logger.error('got unrecognized exception, silently catching it to avoid breaking loop')
             logger.error(e)
@@ -231,22 +266,7 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
 
     @bot.event
     async def on_ready():
-        """Bot event to start background task and create worker processes to handle any outstanding notifications"""
-        notification_cursor = my_turn_ca_db.notifications.find({'message': {'$exists': False}})
-        for notification in notification_cursor:
-            jobs = k8s_batch.list_namespaced_job(namespace=namespace,
-                                                 label_selector=f'job-name={notification["job_name"]}')
-            # if job doesn't exist or the job exists but has permanently failed, create another
-            if not jobs.items or jobs.items[0].status.failed:
-                job = create_notification_job(user_id=notification['user_id'],
-                                              channel_id=notification['channel_id'],
-                                              zip_code=notification['zip_code'])
-                my_turn_ca_db.notifications.update_one({'_id': notification['_id']}, {'$set': {'job_name': job.metadata.name}})
-                # let's not spawn all the jobs at once and blow up myturn
-                time.sleep(JOB_DELAY)
-
-        notification_cursor.close()
-        if not poll_notifications.is_running():
-            poll_notifications.start()
+        """Bot event to start background tasks"""
+        [task.start() for task in [poll_notifications, check_jobs] if not task.is_running()]
 
     bot.run(token)

@@ -11,6 +11,7 @@ from .myTurnCA import MyTurnCA
 
 
 class NotificationGenerator:
+    """Class to fulfill a requested notification"""
     def __init__(self, mongodb_user: str, mongodb_password: str, mongodb_host: str, mongodb_port: str):
         self.nomi = pgeocode.Nominatim('us')
         self.mongodb = pymongo.MongoClient(f'mongodb://{mongodb_user}:{mongodb_password}@{mongodb_host}:{mongodb_port}')
@@ -18,11 +19,10 @@ class NotificationGenerator:
         self.logger = logging.getLogger(__name__)
 
     def generate_notification(self, channel_id: int, user_id: int, zip_code: int):
-        """Function run by worker processes to notify users when available appointments are found"""
+        """Checks if appointments are available near the given zip code and updates
+        the notification document when they are found"""
         zip_code_query = self.nomi.query_postal_code(zip_code)
         while True:
-            # temporarily force failure
-            raise Exception('this is a failure!')
             start_date = datetime.now(tz=pytz.timezone('US/Pacific')).date()
             end_date = start_date + timedelta(weeks=1)
             appointments = self.my_turn_ca.get_appointments(latitude=zip_code_query['latitude'],
