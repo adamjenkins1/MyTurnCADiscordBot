@@ -21,7 +21,6 @@
 #### Adding the bot to your server
 MyTurnCABot is now public, so anyone can add it to their server using this [link](https://discord.com/api/oauth2/authorize?client_id=814292600747458600&permissions=67584&scope=bot)!
 
-
 #### Current limitations
   * When a user asks to be notified when appointments become available, the bot creates a kubernetes job on the cluster it's hosted on, which is 
     currently a 3 node bare metal kubernetes cluster. Given that resource requests have been set in the job spec, the number of concurrent
@@ -42,3 +41,9 @@ No Category:
 Type !help command for more info on a command.
 You can also type !help category for more info on a category.
 ```
+
+#### Getting help
+If you need help, join the [support discord server](https://discord.gg/PeDjrZqv) or create an issue
+
+#### Contributing
+Contributions are welcome! If you have an idea for a new feature, create a feature request issue before publishing a pull request.
