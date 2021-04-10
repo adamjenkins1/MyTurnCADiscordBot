@@ -1,4 +1,4 @@
-discord.py==1.7.0
+discord.py==1.7.1
 pgeocode==0.3.0
 pymongo==3.11.3
 pytz==2021.1

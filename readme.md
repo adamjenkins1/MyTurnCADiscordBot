@@ -18,8 +18,11 @@
   * Find appointments more than a week in the future
   * Find appointments outside of California
 
+#### Adding the bot to your server
+MyTurnCABot is now public, so anyone can add it to their server using this [link](https://discord.com/api/oauth2/authorize?client_id=814292600747458600&permissions=67584&scope=bot)!
+
+
 #### Current limitations
-  * MyTurnCABot is not yet public on Discord, as this project is in the early stages of development. The intention is to allow anyone to add the bot to their Discord server once the project is more mature. Until then, if you're interested in using it, message ad4m#9596 on Discord.
   * When a user asks to be notified when appointments become available, the bot creates a kubernetes job on the cluster it's hosted on, which is 
     currently a 3 node bare metal kubernetes cluster. Given that resource requests have been set in the job spec, the number of concurrent
     notification jobs the bot can create is limited by the available cluster resources.
