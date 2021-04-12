@@ -1,6 +1,8 @@
 """Discord bot to help you find a COVID-19 vaccination appointment in CA"""
+import functools
 import logging
 from datetime import timedelta, datetime
+from typing import Callable, Any
 
 import pgeocode
 import pymongo
@@ -48,6 +50,10 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
     nomi = pgeocode.Nominatim('us')
     mongodb = pymongo.MongoClient(f'mongodb://{mongodb_user}:{mongodb_password}@{mongodb_host}:{mongodb_port}')
     my_turn_ca_db = mongodb.my_turn_ca
+
+    async def run_blocking(func: Callable, *args, **kwargs) -> Any:
+        """Async helper method to make blocking calls asynchronously"""
+        return await bot.loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 
     def is_zip_code_valid(zip_code_result: DataFrame):
         """Returns whether or not the provided DataFrame represents a valid CA zip code"""
@@ -205,7 +211,9 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
         if not is_zip_code_valid(city):
             raise InvalidZipCode
 
-        locations = my_turn_ca.get_locations(city['latitude'], city['longitude'])
+        locations = await run_blocking(func=my_turn_ca.get_locations,
+                                       latitude=city['latitude'],
+                                       longitude=city['longitude'])
         if not locations:
             await ctx.reply('Sorry, I didn\'t find any vaccination locations in your area')
             return
@@ -225,8 +233,11 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
 
         start_date = datetime.now(tz=pytz.timezone('US/Pacific')).date()
         end_date = start_date + timedelta(weeks=1)
-        appointments = my_turn_ca.get_appointments(latitude=city['latitude'], longitude=city['longitude'],
-                                                   start_date=start_date, end_date=end_date)
+        appointments = await run_blocking(func=my_turn_ca.get_appointments,
+                                          latitude=city['latitude'],
+                                          longitude=city['longitude'],
+                                          start_date=start_date,
+                                          end_date=end_date)
         if not appointments:
             await ctx.reply('Sorry, I didn\'t find any vaccination appointments in your area')
             return
