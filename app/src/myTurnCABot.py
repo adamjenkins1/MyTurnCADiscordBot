@@ -16,7 +16,7 @@ from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIE
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
     GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, MONGO_USER, \
     MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, JOB_MAX_RETRIES, JOB_TTL_SECONDS_AFTER_FINISHED, JOB_NAME_PREFIX, \
-    JOB_RESTART_POLICY, JOB_DELETION_PROPAGATION_POLICY, JOB_RESOURCE_REQUESTS
+    JOB_RESTART_POLICY, JOB_DELETION_PROPAGATION_POLICY, JOB_RESOURCE_REQUESTS, MY_TURN_API_KEY
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
@@ -100,7 +100,8 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                                         MONGO_USER: mongodb_user,
                                         MONGO_PASSWORD: mongodb_password,
                                         MONGO_HOST: mongodb_host,
-                                        MONGO_PORT: mongodb_port
+                                        MONGO_PORT: mongodb_port,
+                                        MY_TURN_API_KEY: my_turn_api_key
                                     }.items()
                                 ]
                             )]
