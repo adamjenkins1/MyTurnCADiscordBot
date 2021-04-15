@@ -12,42 +12,45 @@ DEFAULT_RETRY_STRATEGY = Retry(
 ELIGIBLE_REQUEST_BODY = {
     'eligibilityQuestionResponse': [
         {
-            'id': 'q.screening.18.yr.of.age',
-            'value': [
-                'q.screening.18.yr.of.age'
-            ],
-            'type': 'multi-select'
-        },
-        {
-            'id': 'q.screening.health.data',
-            'value': [
-                'q.screening.health.data'
-            ],
-            'type': 'multi-select'
-        },
-        {
             'id': 'q.screening.privacy.statement',
-            'value': [
-                'q.screening.privacy.statement'
-            ],
-            'type': 'multi-select'
+            'type': 'multi-select',
+            'value': ['q.screening.privacy.statement']
         },
         {
             'id': 'q.screening.eligibility.age.range',
-            'value': '75 and older',
-            'type': 'single-select'
-        },
-        {
-            'id': 'q.screening.eligibility.industry',
-            'value': 'Other',
-            'type': 'single-select'
+            'type': 'single-select',
+            'value': '18 and older'
         },
         {
             'id': 'q.screening.eligibility.county',
-            'value': 'Alameda',
+            'type': 'single-select',
+            'value': 'Alameda'
+        },
+        {
+            'id': 'q.screening.different.county',
+            'type': 'single-select',
+            'value': 'No'
+        },
+        {
+            'id': 'q.screening.county.of.work',
             'type': 'single-select'
+        },
+        {
+            'id': 'q.screening.accessibility.code',
+            'type': 'text'
+        },
+        {
+            'id': 'q.screening.18.yr.of.age',
+            'type': 'multi-select',
+            'value': ['q.screening.18.yr.of.age']
+        },
+        {
+            'id': 'q.screening.health.data',
+            'type': 'multi-select',
+            'value': ['q.screening.health.data']
         }
-    ]
+    ],
+    'url': 'https://myturn.ca.gov/screening'
 }
 ELIGIBILITY_URL = 'eligibility'
 LOCATIONS_URL = 'locations/search'
