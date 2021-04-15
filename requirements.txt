@@ -3,7 +3,7 @@ pgeocode==0.3.0
 pymongo==3.11.3
 pytz==2021.1
 requests==2.25.1
-pandas==1.2.3
+pandas==1.2.4
 responses==0.13.2
 coverage==5.5
 requests_toolbelt==0.9.1
