@@ -173,11 +173,12 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                     logger.info(f'found populated notification in database, sending message to channel - {notification}')
                     channel = await bot.fetch_channel(notification['channel_id'])
                     await channel.send(notification['message'].format(user_id=notification['user_id']))
-                    my_turn_ca_db.notifications.delete_one({'_id': notification['_id']})
                 except NotFound:
                     logger.error(f'channel {notification["channel_id"]} was not found, maybe it was deleted...?')
                 except Forbidden:
                     logger.error(f'we don\'t have sufficient privileges to fetch channel {notification["channel_id"]}')
+
+                my_turn_ca_db.notifications.delete_one({'_id': notification['_id']})
         except Exception as e:
             logger.error('got unrecognized exception, silently catching it to avoid breaking loop')
             logger.error(e)
