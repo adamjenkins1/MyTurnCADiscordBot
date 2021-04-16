@@ -188,10 +188,27 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
         notification or the job failed"""
         try:
             for notification in my_turn_ca_db.notifications.find({'message': {'$exists': False}}):
-                jobs = bot.k8s_batch.list_namespaced_job(namespace=namespace,
-                                                         label_selector=f'job-name={notification["job_name"]}')
-                # if job doesn't exist or the job exists but has permanently failed, create another
-                if not jobs.items or jobs.items[0].status.failed:
+                current_job = bot.k8s_batch.list_namespaced_job(namespace=namespace,
+                                                                label_selector=f'job-name={notification["job_name"]}')
+
+                # if job exists and hasn't permanently failed, no need to do anything
+                if current_job.items and not current_job.items[0].status.failed:
+                    continue
+
+                found_existing_job = False
+                for similar_notification in my_turn_ca_db.notifications.find({'zip_code': notification['zip_code'],
+                                                                              'message': {'$exists': False},
+                                                                              '_id': {'$ne': notification['_id']}}):
+                    existing_job = bot.k8s_batch.list_namespaced_job(namespace=namespace,
+                                                                     label_selector=f'job-name={similar_notification["job_name"]}')
+                    # if there is an existing job for the same zip code, let's use that
+                    if existing_job.items and not existing_job.items[0].status.failed:
+                        found_existing_job = True
+                        my_turn_ca_db.notifications.update_one({'_id': notification['_id']},
+                                                               {'$set': {'job_name': similar_notification['job_name']}})
+                        break
+                # if we didn't find any existing jobs, create one
+                if not found_existing_job:
                     job = create_notification_job(notification['zip_code'])
                     my_turn_ca_db.notifications.update_one({'_id': notification['_id']},
                                                            {'$set': {'job_name': job.metadata.name}})
