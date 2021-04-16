@@ -19,7 +19,7 @@ class NotificationGenerator:
         self.my_turn_ca = MyTurnCA(api_key=my_turn_api_key)
         self.logger = logging.getLogger(__name__)
 
-    def generate_notification(self, channel_id: int, user_id: int, zip_code: int):
+    def generate_notification(self, zip_code: int):
         """Checks if appointments are available near the given zip code and updates
         the notification document when they are found"""
         zip_code_query = self.nomi.query_postal_code(zip_code)
@@ -33,25 +33,14 @@ class NotificationGenerator:
                 time.sleep(NOTIFICATION_WAIT_PERIOD)
                 continue
 
-            message = f'Hey <@{user_id}>, I found available openings at these locations from ' \
+            message = 'Hey <@{user_id}>, I found available openings at these locations from ' \
                       f'{start_date.strftime("%x")} to {end_date.strftime("%x")}, ' \
-                      f'go to https://myturn.ca.gov to make an appointment!\n'
+                      'go to https://myturn.ca.gov to make an appointment!\n'
 
             for appointment in appointments:
                 message += f'  * {str(appointment.location)} - {len(appointment.slots)} appointment(s) available\n'
 
-            self.logger.info(f'found appointments, updating DB document - channel_id = {channel_id}, '
-                             f'user_id = {user_id}, message = {message}, zip_code = {zip_code}')
-
-            self.mongodb.my_turn_ca.notifications.update_one(
-                {
-                    'user_id': user_id,
-                    'zip_code': zip_code,
-                    'channel_id': channel_id
-                },
-                {
-                    '$set': {'message': message}
-                }
-            )
-
+            self.logger.info(f'found appointments, updating notifications '
+                             f'for zip_code {zip_code} with message - {message}')
+            self.mongodb.my_turn_ca.notifications.update({'zip_code': zip_code}, {'$set': {'message': message}})
             return

@@ -64,7 +64,7 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
             zip_code_result['state_code'] != 'CA'
         ])
 
-    def create_notification_job(user_id: int, channel_id: int, zip_code: int) -> client.V1Job:
+    def create_notification_job(zip_code: int) -> client.V1Job:
         """Creates job to fulfill requested notification"""
         return bot.k8s_batch.create_namespaced_job(
             namespace=namespace,
@@ -84,10 +84,6 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                                 resources=client.V1ResourceRequirements(requests=JOB_RESOURCE_REQUESTS),
                                 args=[
                                     '--worker',
-                                    '--channel_id',
-                                    str(channel_id),
-                                    '--user_id',
-                                    str(user_id),
                                     '--zip_code',
                                     str(zip_code)
                                 ],
@@ -146,11 +142,13 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
             return
 
         await ctx.reply(f'OK, I\'ll let you know when I find appointments in your area')
-        job = create_notification_job(user_id=ctx.author.id, channel_id=ctx.channel.id, zip_code=zip_code)
+        existing_notification = my_turn_ca_db.notifications.find_one({'zip_code': zip_code})
+        job_name = existing_notification['job_name'] if existing_notification is not None \
+            else create_notification_job(zip_code).metadata.name
         my_turn_ca_db.notifications.insert_one({
             'user_id': ctx.author.id,
             'zip_code': zip_code,
-            'job_name': job.metadata.name,
+            'job_name': job_name,
             'channel_id': ctx.channel.id
         })
 
@@ -174,7 +172,7 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                 try:
                     logger.info(f'found populated notification in database, sending message to channel - {notification}')
                     channel = await bot.fetch_channel(notification['channel_id'])
-                    await channel.send(notification['message'])
+                    await channel.send(notification['message'].format(user_id=notification['user_id']))
                     my_turn_ca_db.notifications.delete_one({'_id': notification['_id']})
                 except NotFound:
                     logger.error(f'channel {notification["channel_id"]} was not found, maybe it was deleted...?')
@@ -194,9 +192,7 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                                                          label_selector=f'job-name={notification["job_name"]}')
                 # if job doesn't exist or the job exists but has permanently failed, create another
                 if not jobs.items or jobs.items[0].status.failed:
-                    job = create_notification_job(user_id=notification['user_id'],
-                                                  channel_id=notification['channel_id'],
-                                                  zip_code=notification['zip_code'])
+                    job = create_notification_job(notification['zip_code'])
                     my_turn_ca_db.notifications.update_one({'_id': notification['_id']},
                                                            {'$set': {'job_name': job.metadata.name}})
                     # let's only create one job per loop to avoid spawning all the jobs at once and blowing up myturn

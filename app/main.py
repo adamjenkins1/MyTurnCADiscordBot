@@ -35,8 +35,6 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--worker', action='store_true')
-    parser.add_argument('--channel_id', type=int)
-    parser.add_argument('--user_id', type=int)
     parser.add_argument('--zip_code', type=int)
     args = parser.parse_args()
 
@@ -53,9 +51,7 @@ if __name__ == '__main__':
                                                        mongodb_host=WORKER_ENV_VARS[MONGO_HOST],
                                                        mongodb_port=WORKER_ENV_VARS[MONGO_PORT],
                                                        my_turn_api_key=WORKER_ENV_VARS[MY_TURN_API_KEY])
-        notification_generator.generate_notification(channel_id=args.channel_id,
-                                                     user_id=args.user_id,
-                                                     zip_code=args.zip_code)
+        notification_generator.generate_notification(args.zip_code)
         sys.exit(0)
 
     for var in BOT_ENV_VARS:
