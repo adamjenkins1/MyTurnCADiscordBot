@@ -10,7 +10,7 @@ from .constants import MOCK_VACCINE_DATA, EMPTY_LOCATIONS_RESPONSE, NON_EMPTY_LO
     EMPTY_LOCATION_AVAILABILITY_RESPONSE, UNAVAILABLE_LOCATION_AVAILABILITY_RESPONSE, \
     MIXED_LOCATION_AVAILABILITY_RESPONSE, TEST_LOCATION, EMPTY_AVAILABILITY_SLOTS_RESPONSE, \
     OLD_AVAILABILITY_SLOTS_RESPONSE, MIXED_AVAILABILITY_SLOTS_RESPONSE, AVAILABLE_LOCATION_AVAILABILITY_RESPONSE, \
-    NEW_AVAILABILITY_SLOTS_RESPONSE, BAD_JSON_RESPONSE, CURRENT_TIME
+    NEW_AVAILABILITY_SLOTS_RESPONSE, BAD_JSON_RESPONSE, CURRENT_TIME, TEST_API_KEY
 from ..src.constants import MY_TURN_URL, LOCATIONS_URL, LOCATION_AVAILABILITY_URL, LOCATION_AVAILABILITY_SLOTS_URL
 from ..src.myTurnCA import MyTurnCA, Location, LocationAvailability, LocationAvailabilitySlots
 
@@ -19,7 +19,7 @@ class MyTurnCATest(TestCase):
     """Main unit test class"""
     @patch('app.src.myTurnCA.MyTurnCA._get_vaccine_data', MagicMock(return_value=MOCK_VACCINE_DATA))
     def setUp(self):
-        self.my_turn_ca = MyTurnCA()
+        self.my_turn_ca = MyTurnCA(api_key=TEST_API_KEY)
         self.today = datetime.now(tz=pytz.timezone('US/Pacific')).date()
         self.slots_url = LOCATION_AVAILABILITY_SLOTS_URL.format(location_id=TEST_LOCATION.location_id,
                                                                 start_date=self.today.strftime('%Y-%m-%d'))

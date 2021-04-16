@@ -1,6 +1,7 @@
 """Test constants module"""
 from ..src.myTurnCA import Location
 
+TEST_API_KEY = 'TEST_API_KEY'
 BAD_JSON_RESPONSE = 'this is not a json!'
 MOCK_VACCINE_DATA = 'VACCINE_DATA'
 EMPTY_LOCATIONS_RESPONSE = {'locations': []}

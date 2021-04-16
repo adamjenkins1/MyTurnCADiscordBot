@@ -16,7 +16,7 @@ from .constants import COMMAND_PREFIX, BOT_DESCRIPTION, CANCEL_NOTIFICATION_BRIE
     NOTIFY_BRIEF, NOTIFY_DESCRIPTION, GET_NOTIFICATIONS_DESCRIPTION, GET_LOCATIONS_DESCRIPTION, \
     GET_APPOINTMENTS_BRIEF, GET_APPOINTMENTS_DESCRIPTION, MONGO_USER, \
     MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, JOB_MAX_RETRIES, JOB_TTL_SECONDS_AFTER_FINISHED, JOB_NAME_PREFIX, \
-    JOB_RESTART_POLICY, JOB_DELETION_PROPAGATION_POLICY, JOB_RESOURCE_REQUESTS
+    JOB_RESTART_POLICY, JOB_DELETION_PROPAGATION_POLICY, JOB_RESOURCE_REQUESTS, MY_TURN_API_KEY
 from .exceptions import InvalidZipCode
 from .myTurnCA import MyTurnCA
 
@@ -42,11 +42,11 @@ class MyTurnCABot(commands.Bot):
 
 
 def run(token: str, namespace: str, job_image: str, mongodb_user: str,
-        mongodb_password: str, mongodb_host: str, mongodb_port: str):
+        mongodb_password: str, mongodb_host: str, mongodb_port: str, my_turn_api_key: str):
     """Main bot driver method"""
     bot = MyTurnCABot(command_prefix=COMMAND_PREFIX, namespace=namespace, description=BOT_DESCRIPTION)
     logger = logging.getLogger(__name__)
-    my_turn_ca = MyTurnCA()
+    my_turn_ca = MyTurnCA(api_key=my_turn_api_key)
     nomi = pgeocode.Nominatim('us')
     mongodb = pymongo.MongoClient(f'mongodb://{mongodb_user}:{mongodb_password}@{mongodb_host}:{mongodb_port}')
     my_turn_ca_db = mongodb.my_turn_ca
@@ -100,7 +100,8 @@ def run(token: str, namespace: str, job_image: str, mongodb_user: str,
                                         MONGO_USER: mongodb_user,
                                         MONGO_PASSWORD: mongodb_password,
                                         MONGO_HOST: mongodb_host,
-                                        MONGO_PORT: mongodb_port
+                                        MONGO_PORT: mongodb_port,
+                                        MY_TURN_API_KEY: my_turn_api_key
                                     }.items()
                                 ]
                             )]

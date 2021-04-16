@@ -12,10 +12,11 @@ from .myTurnCA import MyTurnCA
 
 class NotificationGenerator:
     """Class to fulfill a requested notification"""
-    def __init__(self, mongodb_user: str, mongodb_password: str, mongodb_host: str, mongodb_port: str):
+    def __init__(self, mongodb_user: str, mongodb_password: str, mongodb_host: str,
+                 mongodb_port: str, my_turn_api_key: str):
         self.nomi = pgeocode.Nominatim('us')
         self.mongodb = pymongo.MongoClient(f'mongodb://{mongodb_user}:{mongodb_password}@{mongodb_host}:{mongodb_port}')
-        self.my_turn_ca = MyTurnCA()
+        self.my_turn_ca = MyTurnCA(api_key=my_turn_api_key)
         self.logger = logging.getLogger(__name__)
 
     def generate_notification(self, channel_id: int, user_id: int, zip_code: int):

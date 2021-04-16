@@ -57,6 +57,7 @@ LOCATIONS_URL = 'locations/search'
 LOCATION_AVAILABILITY_URL = 'locations/{location_id}/availability'
 LOCATION_AVAILABILITY_SLOTS_URL = 'locations/{location_id}/date/{start_date}/slots'
 JSON_DECODE_ERROR_MSG = 'unable to deserialize response body, "{body}" must not be a JSON, returning empty response'
+GOOD_BOT_HEADER = 'goodbot'
 FIREFOX_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0'
 MY_TURN_ORIGIN = 'https://myturn.ca.gov'
 REQUEST_HEADERS = {
@@ -72,6 +73,7 @@ MONGO_HOST = 'MONGO_HOST'
 MONGO_PORT = 'MONGO_PORT'
 NAMESPACE = 'NAMESPACE'
 JOB_IMAGE = 'JOB_IMAGE'
+MY_TURN_API_KEY = 'MY_TURN_API_KEY'
 
 # MyTurnCABot constants
 COMMAND_PREFIX = '!'
