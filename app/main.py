@@ -68,4 +68,4 @@ if __name__ == '__main__':
                     mongodb_password=BOT_ENV_VARS[MONGO_PASSWORD],
                     mongodb_host=BOT_ENV_VARS[MONGO_HOST],
                     mongodb_port=BOT_ENV_VARS[MONGO_PORT],
-                    my_turn_api_key=WORKER_ENV_VARS[MY_TURN_API_KEY])
+                    my_turn_api_key=BOT_ENV_VARS[MY_TURN_API_KEY])
