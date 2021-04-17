@@ -12,7 +12,8 @@ from requests.models import Response
 from requests_toolbelt.sessions import BaseUrlSession
 
 from .constants import MY_TURN_URL, ELIGIBLE_REQUEST_BODY, DEFAULT_RETRY_STRATEGY, ELIGIBILITY_URL, LOCATIONS_URL, \
-    LOCATION_AVAILABILITY_URL, LOCATION_AVAILABILITY_SLOTS_URL, JSON_DECODE_ERROR_MSG, GOOD_BOT_HEADER, REQUEST_HEADERS
+    LOCATION_AVAILABILITY_URL, LOCATION_AVAILABILITY_SLOTS_URL, JSON_DECODE_ERROR_MSG, GOOD_BOT_HEADER, \
+    REQUEST_HEADERS, LOCATION_POOLS
 
 
 class Location:
@@ -83,7 +84,10 @@ class MyTurnCA:
                 'lng': longitude
             },
             'fromDate': datetime.now(tz=pytz.timezone('US/Pacific')).strftime('%Y-%m-%d'),
-            'vaccineData': self.vaccine_data
+            'vaccineData': self.vaccine_data,
+            'locationQuery': {
+                'includePools': LOCATION_POOLS
+            }
         }
 
         response = self._send_request(url=LOCATIONS_URL, body=body)
