@@ -43,7 +43,7 @@ You can also type !help category for more info on a category.
 ```
 
 #### Getting help
-If you need help, join the [support discord server](https://discord.gg/PeDjrZqv) or create an issue
+If you need help, join the [support discord server](https://discord.gg/mJVYgP6qsP) or create an issue
 
 #### Contributing
 Contributions are welcome! If you have an idea for a new feature, create a feature request issue before publishing a pull request.
