@@ -36,6 +36,20 @@ ELIGIBLE_REQUEST_BODY = {
             'type': 'single-select'
         },
         {
+            'id': 'q.screening.homebound',
+            'type': 'single-select',
+            'value': 'No'
+        },
+        {
+            'id': 'q.screening.first.dose',
+            'type': 'single-select',
+            'value': 'No'
+        },
+        {
+            'id': 'q.screening.first.dose.brand',
+            'type': 'single-select'
+        },
+        {
             'id': 'q.screening.accessibility.code',
             'type': 'text'
         },
@@ -49,8 +63,7 @@ ELIGIBLE_REQUEST_BODY = {
             'type': 'multi-select',
             'value': ['q.screening.health.data']
         }
-    ],
-    'url': 'https://myturn.ca.gov/screening'
+    ]
 }
 ELIGIBILITY_URL = 'eligibility'
 LOCATIONS_URL = 'locations/search'
