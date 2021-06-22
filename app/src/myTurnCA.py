@@ -86,7 +86,9 @@ class MyTurnCA:
             'fromDate': datetime.now(tz=pytz.timezone('US/Pacific')).strftime('%Y-%m-%d'),
             'vaccineData': self.vaccine_data,
             'locationQuery': {
-                'includePools': LOCATION_POOLS
+                'includePools': LOCATION_POOLS,
+                'excludeTags': [],
+                'includeTags': []
             }
         }
 
