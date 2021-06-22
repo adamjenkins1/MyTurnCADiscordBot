@@ -86,10 +86,10 @@ class MyTurnCA:
             'fromDate': datetime.now(tz=pytz.timezone('US/Pacific')).strftime('%Y-%m-%d'),
             'vaccineData': self.vaccine_data,
             'locationQuery': {
-                'includePools': LOCATION_POOLS
-            },
-            'excludeTags': [],
-            'includeTags': []
+                'includePools': LOCATION_POOLS,
+                'excludeTags': [],
+                'includeTags': []
+            }
         }
 
         response = self._send_request(url=LOCATIONS_URL, body=body)
