@@ -87,7 +87,9 @@ class MyTurnCA:
             'vaccineData': self.vaccine_data,
             'locationQuery': {
                 'includePools': LOCATION_POOLS
-            }
+            },
+            'excludeTags': [],
+            'includeTags': []
         }
 
         response = self._send_request(url=LOCATIONS_URL, body=body)
