@@ -2,7 +2,7 @@ discord.py==1.7.1
 pgeocode==0.3.0
 pymongo==3.11.3
 pytz==2021.1
-requests==2.25.1
+requests==2.31.0
 pandas==1.2.4
 responses==0.13.2
 coverage==5.5
